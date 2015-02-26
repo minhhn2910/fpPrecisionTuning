@@ -11,7 +11,7 @@ error_rate = 0.001
 
 lower_precision_bound = 4
 
-minimum_cost = 100000 #some abitrary big value for cost comparision
+minimum_cost = 1000000 #some abitrary big value for cost comparision
 
 minimum_configurations = [] #result of minimum precisions configurations
   
@@ -43,10 +43,11 @@ def random_search(conf_file,target_file, program):
 			#print i
 			#print permutation_array
 		update_cost(precision_array)
-		write_log(precision_array, loop)
+		write_log(precision_array, loop , permutation_array[0])
 		#print 'write log '
 	print 'The list of possible configurations: '
-	for item in  minimum_configurations:
+#	final_result=[ii for n,ii in enumerate(minimum_configurations) if ii not in minimum_configurations[:n]]
+	for item in minimum_configurations:	
 		print item
 	write_conf(conf_file, original_array)		
 	
@@ -60,9 +61,13 @@ def check_output(floating_result,target_result):
 		print 'Error : floating result has length: %s while target_result has length: %s' %(len(floating_result),len(target_result))
 		return False
 	for i in range(len(floating_result)):
-		error = abs((floating_result[i] - target_result[i]))/target_result[i]
+		if(target_result[i] == 0.0):
+			error = abs((floating_result[i] - target_result[i]))
+		else:
+			error = abs((floating_result[i] - target_result[i]))/target_result[i]
+			
 		if error > error_rate :
-			print 'Wrong result at variable: %s (error = %s), MPFR_result: %s , target_result: %s' %(i,error,floating_result[i],target_result[i])
+			print 'Wrong result at variable: %s (error = %s), MPFR_result: %s , target_result: %s' %(i+1,error,floating_result[i],target_result[i])
 			return False
 	return True
 
@@ -74,13 +79,14 @@ def update_cost(precision_array):
 		minimum_cost = temp
 		#delete result list
 		minimum_configurations = [] 
+		minimum_configurations.append(precision_array)
 	elif temp == minimum_cost:
 		#append to result
 		minimum_configurations.append(precision_array)
 
-def write_log(precision_array, loop):
+def write_log(precision_array, loop, first_variable):
 	with open('log.txt', 'a') as log_file:
-		log_file.write('Loop ' + str(loop + 1) +' :  ')
+		log_file.write('Loop ' + str(loop + 1) +' : ' + '1st variable: ' + str(first_variable) +' :  ' )
 		log_file.write(str(precision_array) +'\n' )
 		
 def get_permutation(array_length):

@@ -1,0 +1,5 @@
+Loop 1 : 1st variable: 4 :  [11, 21, 33, 20, 8]
+Loop 2 : 1st variable: 0 :  [4, 7, 33, 20, 8]
+Loop 3 : 1st variable: 4 :  [11, 12, 31, 11, 10]
+Loop 4 : 1st variable: 2 :  [11, 22, 5, 20, 20]
+Loop 5 : 1st variable: 1 :  [5, 7, 33, 20, 9]
