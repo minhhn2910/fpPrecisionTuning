@@ -45,7 +45,7 @@ def random_search(conf_file,target_file, program):
 		update_cost(precision_array)
 		write_log(precision_array, loop , permutation_array[0])
 		#print 'write log '
-	print 'The list of possible configurations: '
+	print 'List of possible configurations: '
 #	final_result=[ii for n,ii in enumerate(minimum_configurations) if ii not in minimum_configurations[:n]]
 	for item in minimum_configurations:	
 		print item
