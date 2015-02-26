@@ -3,14 +3,26 @@ import sys
 import random
 import subprocess
 import os
+import os.path
 
 target_result=[]
-error_rate=0.001
+
+error_rate = 0.001
+
+lower_precision_bound = 4
+
+minimum_cost = 100000 #some abitrary big value for cost comparision
+
+minimum_configurations = [] #result of minimum precisions configurations
+  
 def random_search(conf_file,target_file, program):
-	os.remove('log.txt')
+	global target_result
+	if os.path.exists('log.txt'):
+		os.remove('log.txt')
 	random.seed()
-	target_result = read_target(target_file_name)
+	target_result = read_target(target_file)
 	original_array = read_conf(conf_file)
+	reach_lower_bound = False
 	for loop in range(len(original_array)):
 		precision_array = list(original_array)
 		permutation_array = get_permutation(len(original_array))
@@ -21,6 +33,8 @@ def random_search(conf_file,target_file, program):
 				previous_i = precision_array[i]
 				#print precision_array
 				precision_array[i] = precision_array[i] - 1;
+				if precision_array[i] < lower_precision_bound :
+					break
 				#print precision_array[i] 
 				#decrease the precision at point i
 				write_conf(conf_file,precision_array)
@@ -28,17 +42,41 @@ def random_search(conf_file,target_file, program):
 			#print precision_array
 			#print i
 			#print permutation_array
+		update_cost(precision_array)
 		write_log(precision_array, loop)
 		#print 'write log '
+	print 'The list of possible configurations: '
+	for item in  minimum_configurations:
+		print item
 	write_conf(conf_file, original_array)		
 	
 def run_program(program):
 	output = subprocess.Popen(['../tests/test.py', ''], stdout=subprocess.PIPE).communicate()[0]
 	floating_result = parse_output(output)
-	
-	if check_output(floating_result,target_result) :
-		return True
-	return False
+	return check_output(floating_result,target_result)
+
+def check_output(floating_result,target_result):
+	if len(floating_result) != len(target_result):
+		print 'Error : floating result has length: %s while target_result has length: %s' %(len(floating_result),len(target_result))
+		return False
+	for i in range(len(floating_result)):
+		error = abs((floating_result[i] - target_result[i]))/target_result[i]
+		if error > error_rate :
+			print 'Wrong result at variable: %s (error = %s), MPFR_result: %s , target_result: %s' %(i,error,floating_result[i],target_result[i])
+			return False
+	return True
+
+def update_cost(precision_array):
+	global minimum_configurations
+	global minimum_cost
+	temp=sum(precision_array) 
+	if temp< minimum_cost:
+		minimum_cost = temp
+		#delete result list
+		minimum_configurations = [] 
+	elif temp == minimum_cost:
+		#append to result
+		minimum_configurations.append(precision_array)
 
 def write_log(precision_array, loop):
 	with open('log.txt', 'a') as log_file:
@@ -72,7 +110,6 @@ def parse_output(output_string):
 #	print result		
 	return result
 			
-
 def read_conf(conf_file_name):
 	#format a1,a2,a3,...
 	list_argument = []
@@ -80,26 +117,26 @@ def read_conf(conf_file_name):
 		for line in conf_file:
 			line.replace(" ", "")
 			#remove unexpected space
-			array = line.split(',')
+			array = line.split(',')	
 			for argument in array:
 				try:
-					if(len(argument)>0):
+					if(len(argument)>0 and argument!='\n'):
 						list_argument.append(int(argument))
 				except:
 					print "Failed to parse conf file"
 	return 	list_argument	
 
-def read_target(target_file_name):
+def read_target(target_file):
 	#format a1,a2,a3...
 	list_target = []
-	with open(target_file_name) as conf_file:
+	with open(target_file) as conf_file:
 		for line in conf_file:
 			line.replace(" ", "")
 			#remove unexpected space
 			array = line.split(',')
 			for target in array:
 				try:
-					if(len(target)>0):
+					if(len(target)>0 and target!='\n'):
 						list_target.append(float(target))
 				except:
 					print "Failed to parse target file"
@@ -116,8 +153,8 @@ def main(argv):
 
 #	testoutput = subprocess.Popen(['cat', '../tests/output.txt'], stdout=subprocess.PIPE).communicate()[0]
 #	parse_output(testoutput)
-	if len(argv) != 2 :
-		print "Usage: ./search.py config_file target_file output_file program"
+	if len(argv) != 3 :
+		print "Usage: ./search.py config_file target_file program"
 	else :
 		if not ('/' in argv[2]):
 			argv[2] = './' + argv[2]
