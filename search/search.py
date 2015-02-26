@@ -1,8 +1,15 @@
 #!/usr/bin/python
 import sys
 import random
+import subprocess
+import os
 
-def random_search(conf_file, program):
+target_result=[]
+error_rate=0.001
+def random_search(conf_file,target_file, program):
+	os.remove('log.txt')
+	random.seed()
+	target_result = read_target(target_file_name)
 	original_array = read_conf(conf_file)
 	for loop in range(len(original_array)):
 		precision_array = list(original_array)
@@ -26,12 +33,10 @@ def random_search(conf_file, program):
 	write_conf(conf_file, original_array)		
 	
 def run_program(program):
-	import subprocess
-	s1 = subprocess.check_output(program)
-	s2 = subprocess.check_output(["echo", "Hello World!"])
-	#print 's1 ' + s1
-	#print 's2 ' + s2
-	if s1 == s2 :
+	output = subprocess.Popen(['../tests/test.py', ''], stdout=subprocess.PIPE).communicate()[0]
+	floating_result = parse_output(output)
+	
+	if check_output(floating_result,target_result) :
 		return True
 	return False
 
@@ -42,10 +47,25 @@ def write_log(precision_array, loop):
 		
 def get_permutation(array_length):
 	result = range(array_length)
-	random.seed()
 	random.shuffle(result)
 	return result
-	
+
+def parse_output(output_string):
+	lines = output_string.split('\n')
+	count = 0
+	valid = False
+	for line in lines:
+		if 'LBM_showGridStatistics:' in line :
+			count = count + 1
+			if count == 2 :
+				valid = True
+		if valid and 'minRho:' in line:
+			print line
+		if valid and 'minU:' in line:
+			print line
+			
+			
+
 def read_conf(conf_file_name):
 	#format a1,a2,a3...
 	list_argument = []
@@ -61,7 +81,23 @@ def read_conf(conf_file_name):
 				except:
 					print "Failed to parse conf file"
 	return 	list_argument	
-	
+
+def read_target(target_file_name):
+	#format a1,a2,a3...
+	list_target = []
+	with open(target_file_name) as conf_file:
+		for line in conf_file:
+			line.replace(" ", "")
+			#remove unexpected space
+			array = line.split(',')
+			for target in array:
+				try:
+					if(len(target)>0):
+						list_target.append(float(target))
+				except:
+					print "Failed to parse conf file"
+	return 	list_target	
+
 def write_conf(conf_file,precision_array):
 	conf_string = ''
 	for i in precision_array:
@@ -70,10 +106,16 @@ def write_conf(conf_file,precision_array):
 		write_file.write(conf_string)
 		
 def main(argv):
-		if len(argv) != 2 :
-			print "Usage: ./search.py config_file program"
-		else :
-			random_search(argv[0],argv[1])
+
+	testoutput = subprocess.Popen(['cat', '../tests/output.txt'], stdout=subprocess.PIPE).communicate()[0]
+	parse_output(testoutput)
+	if len(argv) != 2 :
+		print "Usage: ./search.py config_file target_file output_file program"
+	else :
+		if not ('/' in argv[2]):
+			argv[2] = './' + argv[2]
+
+		random_search(argv[0],argv[1],argv[2])
 			 
 if __name__ == "__main__":
    main(sys.argv[1:])
