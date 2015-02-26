@@ -51,6 +51,7 @@ def get_permutation(array_length):
 	return result
 
 def parse_output(output_string):
+	result = []
 	lines = output_string.split('\n')
 	count = 0
 	valid = False
@@ -59,15 +60,21 @@ def parse_output(output_string):
 			count = count + 1
 			if count == 2 :
 				valid = True
-		if valid and 'minRho:' in line:
-			print line
-		if valid and 'minU:' in line:
-			print line
-			
+		#filter 3 results minRho maxRho mass first
+		if valid and ('minRho:' in line or 'minU:' in line):
+			filtered_values =  filter(lambda a: a!= '',line.split(' '))
+			for i in range(len(filtered_values)):
+				if i%2==1:
+					try:
+						result.append(float(filtered_values[i]))
+					except:
+						print 'failed to get floating value from output: ' + filtered_values[i]
+#	print result		
+	return result
 			
 
 def read_conf(conf_file_name):
-	#format a1,a2,a3...
+	#format a1,a2,a3,...
 	list_argument = []
 	with open(conf_file_name) as conf_file:
 		for line in conf_file:
@@ -95,7 +102,7 @@ def read_target(target_file_name):
 					if(len(target)>0):
 						list_target.append(float(target))
 				except:
-					print "Failed to parse conf file"
+					print "Failed to parse target file"
 	return 	list_target	
 
 def write_conf(conf_file,precision_array):
@@ -107,8 +114,8 @@ def write_conf(conf_file,precision_array):
 		
 def main(argv):
 
-	testoutput = subprocess.Popen(['cat', '../tests/output.txt'], stdout=subprocess.PIPE).communicate()[0]
-	parse_output(testoutput)
+#	testoutput = subprocess.Popen(['cat', '../tests/output.txt'], stdout=subprocess.PIPE).communicate()[0]
+#	parse_output(testoutput)
 	if len(argv) != 2 :
 		print "Usage: ./search.py config_file target_file output_file program"
 	else :
