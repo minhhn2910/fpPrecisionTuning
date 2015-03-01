@@ -9,6 +9,8 @@ target_result=[]
 
 error_rate = 0.001
 
+num_var_ignore = 5
+
 lower_precision_bound = 4
 
 minimum_cost = 1000000 #some abitrary big value for cost comparision
@@ -52,7 +54,7 @@ def random_search(conf_file,target_file, program):
 	write_conf(conf_file, original_array)		
 	
 def run_program(program):
-	output = subprocess.Popen(['../tests/test.py', ''], stdout=subprocess.PIPE).communicate()[0]
+	output = subprocess.Popen(['sh', 'run_lbm_mpfr.sh'], stdout=subprocess.PIPE).communicate()[0]
 	floating_result = parse_output(output)
 	return check_output(floating_result,target_result)
 
@@ -94,28 +96,19 @@ def get_permutation(array_length):
 	random.shuffle(result)
 	return result
 
-def parse_output(output_string):
-	result = []
-	lines = output_string.split('\n')
-	count = 0
-	valid = False
-	for line in lines:
-		if 'LBM_showGridStatistics:' in line :
-			count = count + 1
-			if count == 2 :
-				valid = True
-		#filter 3 results minRho maxRho mass first
-		if valid and ('minRho:' in line or 'minU:' in line):
-			filtered_values =  filter(lambda a: a!= '',line.split(' '))
-			for i in range(len(filtered_values)):
-				if i%2==1:
-					try:
-						result.append(float(filtered_values[i]))
-					except:
-						print 'failed to get floating value from output: ' + filtered_values[i]
-#	print result		
-	return result
-			
+def parse_output(line):
+	list_target = []
+	line.replace(" ", "")
+	#remove unexpected space
+	array = line.split(',')
+	for target in array:
+		try:
+			if(len(target)>0 and target!='\n'):
+				list_target.append(float(target))
+		except:
+			print "Failed to parse target file"
+	return 	list_target[5:]	
+		
 def read_conf(conf_file_name):
 	#format a1,a2,a3,...
 	list_argument = []
@@ -159,6 +152,7 @@ def main(argv):
 
 #	testoutput = subprocess.Popen(['cat', '../tests/output.txt'], stdout=subprocess.PIPE).communicate()[0]
 #	parse_output(testoutput)
+#	print parse_output('9.99999999999999944489e-1,9.99999999999999944489e-1,1.29999999999993168001e6,0,0,9.99998146097700935098e-1,1.04314342693500363562,1.30096331451181332761e6,0,1.27236149465357238661e-2,')
 	if len(argv) != 3 :
 		print "Usage: ./search.py config_file target_file program"
 	else :
