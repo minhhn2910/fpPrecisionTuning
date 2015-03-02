@@ -74,7 +74,11 @@ def check_output(floating_result,target_result):
 		return False
 	for i in range(len(floating_result)):
 		if(target_result[i] == 0.0):
-			error = abs((floating_result[i] - target_result[i]))
+			if(floating_result[i]==0.0):
+				return True
+			else:
+				print 'Wrong result at variable: %s , MPFR_result: %s , target_result: %s' %(i+1,floating_result[i],target_result[i])
+				return False
 		else:
 			error = abs((floating_result[i] - target_result[i]))/target_result[i]
 			

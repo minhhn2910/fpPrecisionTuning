@@ -3,9 +3,10 @@ import os
 import sys
 def main(argv):
 	array=[]
-	if (len(argv)>0):
+	int_precision = 10
+	try:
 		int_precision = int(argv[0])
-	else:
+	except:
 		int_precision = 10
 	with open(os.path.dirname(os.path.abspath(__file__))+'/conf.txt') as conf_file:
 		for line in conf_file:
