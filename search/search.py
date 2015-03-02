@@ -13,6 +13,8 @@ target_result=[]
 
 error_rate = 0.001
 
+ZERO_error_rate=1e-8
+
 num_var_ignore = 5
 
 lower_precision_bound = 4
@@ -74,9 +76,7 @@ def check_output(floating_result,target_result):
 		return False
 	for i in range(len(floating_result)):
 		if(target_result[i] == 0.0):
-			if(floating_result[i]==0.0):
-				return True
-			else:
+			if (abs(floating_result[i]) > ZERO_error_rate):
 				print 'Wrong result at variable: %s , MPFR_result: %s , target_result: %s' %(i+1,floating_result[i],target_result[i])
 				return False
 		else:
