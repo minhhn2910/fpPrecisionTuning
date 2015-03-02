@@ -1,5 +1,30 @@
-Loop 1 : 1st variable: 4 :  [11, 21, 33, 20, 8]
-Loop 2 : 1st variable: 0 :  [4, 7, 33, 20, 8]
-Loop 3 : 1st variable: 4 :  [11, 12, 31, 11, 10]
-Loop 4 : 1st variable: 2 :  [11, 22, 5, 20, 20]
-Loop 5 : 1st variable: 1 :  [5, 7, 33, 20, 9]
+Loop 1 : Permutation vector : [0, 3, 4, 1, 2]
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop 2 : Permutation vector : [1, 0, 2, 3, 4]
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop 3 : Permutation vector : [4, 3, 0, 2, 1]
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop 4 : Permutation vector : [3, 2, 0, 4, 1]
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop 5 : Permutation vector : [4, 3, 0, 1, 2]
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop -1 : Permutation vector : ['------Final result-------']
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop -1 : Permutation vector : ['------Final result-------']
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop -1 : Permutation vector : ['------Final result-------']
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop -1 : Permutation vector : ['------Final result-------']
+Result : [12, 12, 12, 12, 12]
+------------------------------------
+Loop -1 : Permutation vector : ['------Final result-------']
+Result : [12, 12, 12, 12, 12]
+------------------------------------

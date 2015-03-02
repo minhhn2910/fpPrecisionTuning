@@ -5,6 +5,10 @@ import subprocess
 import os
 import os.path
 
+LOWER_BOUND = 0
+UPPER_BOUND = 1
+AVERAGE = 2
+
 target_result=[]
 
 error_rate = 0.001
@@ -25,42 +29,48 @@ def random_search(conf_file,target_file, program):
 	target_result = read_target(target_file)
 	original_array = read_conf(conf_file)
 	reach_lower_bound = False
+
 	for loop in range(len(original_array)):
+#	for fake_precision in range(2,65):
 		precision_array = list(original_array)
 		permutation_array = get_permutation(len(original_array))
 		for i in permutation_array:	
-			previous_i = precision_array[i]
+#			previous_i = precision_array[i]
 			write_conf(conf_file,precision_array)
-			while run_program(program):
-				previous_i = precision_array[i]
-				#print precision_array
-				precision_array[i] = precision_array[i] - 1;
-				if precision_array[i] < lower_precision_bound :
-					break
-				#print precision_array[i] 
-				#decrease the precision at point i
+
+			boundary = [2,64,33]
+			while ((boundary[UPPER_BOUND] - boundary[LOWER_BOUND]) != 1):
+				precision_array[i] = boundary[AVERAGE];
 				write_conf(conf_file,precision_array)
-			precision_array[i] = previous_i
-			#print precision_array
-			#print i
-			#print permutation_array
+				if (run_program(program)):
+					boundary[UPPER_BOUND] = boundary[AVERAGE]
+				else:
+					boundary[LOWER_BOUND] = boundary[AVERAGE]	
+				boundary[AVERAGE] = (boundary[UPPER_BOUND] + boundary[LOWER_BOUND])/2
+			if boundary[UPPER_BOUND] < lower_precision_bound:
+				boundary[UPPER_BOUND] = lower_precision_bound
+			precision_array[i] = boundary[UPPER_BOUND]
+			
 		update_cost(precision_array)
-		write_log(precision_array, loop , permutation_array[0])
+		write_log(precision_array, loop , permutation_array)
 		#print 'write log '
 	print 'List of possible configurations: '
 #	final_result=[ii for n,ii in enumerate(minimum_configurations) if ii not in minimum_configurations[:n]]
 	for item in minimum_configurations:	
+		write_log(item,-2, ['------Final result-------'])
 		print item
 	write_conf(conf_file, original_array)		
 	
 def run_program(program):
-	output = subprocess.Popen(['sh', 'run_lbm_mpfr.sh'], stdout=subprocess.PIPE).communicate()[0]
+#	output = subprocess.Popen(['sh', 'run_lbm_mpfr.sh'], stdout=subprocess.PIPE).communicate()[0]
+	output = subprocess.Popen([program, ''], stdout=subprocess.PIPE).communicate()[0]
 	floating_result = parse_output(output)
 	return check_output(floating_result,target_result)
 
 def check_output(floating_result,target_result):
 	if len(floating_result) != len(target_result):
 		print 'Error : floating result has length: %s while target_result has length: %s' %(len(floating_result),len(target_result))
+		print floating_result
 		return False
 	for i in range(len(floating_result)):
 		if(target_result[i] == 0.0):
@@ -86,11 +96,13 @@ def update_cost(precision_array):
 		#append to result
 		minimum_configurations.append(precision_array)
 
-def write_log(precision_array, loop, first_variable):
+def write_log(precision_array, loop, permutation):
 	with open('log.txt', 'a') as log_file:
-		log_file.write('Loop ' + str(loop + 1) +' : ' + '1st variable: ' + str(first_variable) +' :  ' )
-		log_file.write(str(precision_array) +'\n' )
-		
+		log_file.write('Loop ' + str(loop + 1) +' : ')
+		log_file.write('Permutation vector : ' + str(permutation) + '\n') 
+		log_file.write('Result : ' +  str(precision_array) +'\n' )
+		log_file.write('------------------------------------\n')
+
 def get_permutation(array_length):
 	result = range(array_length)
 	random.shuffle(result)
@@ -99,14 +111,18 @@ def get_permutation(array_length):
 def parse_output(line):
 	list_target = []
 	line.replace(" ", "")
+	line.replace('\n','')
 	#remove unexpected space
 	array = line.split(',')
+#	print array
 	for target in array:
 		try:
 			if(len(target)>0 and target!='\n'):
 				list_target.append(float(target))
 		except:
-			print "Failed to parse target file"
+			#print "Failed to parse output string"
+			continue
+#		print list_target
 	return 	list_target[5:]	
 		
 def read_conf(conf_file_name):
@@ -141,9 +157,9 @@ def read_target(target_file):
 					print "Failed to parse target file"
 	return 	list_target	
 
-def write_conf(conf_file,precision_array):
+def write_conf(conf_file,original_array):
 	conf_string = ''
-	for i in precision_array:
+	for i in original_array:
 		conf_string += str(i) + ","
 	with open(conf_file, 'w') as write_file:
 		write_file.write(conf_string)
