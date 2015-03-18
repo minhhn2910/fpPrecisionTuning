@@ -34,7 +34,8 @@ def random_search(conf_file,target_file, program):
 
 	for loop in range(len(original_array)):
 #	for fake_precision in range(2,65):
-		precision_array = list(original_array)
+	#	precision_array = list(original_array)
+		precision_array = [64]*len(original_array)
 		permutation_array = get_permutation(len(original_array))
 		for i in permutation_array:	
 #			previous_i = precision_array[i]
