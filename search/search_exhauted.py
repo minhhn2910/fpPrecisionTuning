@@ -4,7 +4,7 @@ import random
 import subprocess
 import os
 import os.path
-
+from itertools import permutations
 LOWER_BOUND = 0
 UPPER_BOUND = 1
 AVERAGE = 2
@@ -15,7 +15,6 @@ error_rate = 0.001
 
 ZERO_error_rate=1e-8
 
-num_var_ignore = 5
 
 lower_precision_bound = 4
 
@@ -28,15 +27,17 @@ def random_search(conf_file,target_file, program):
 	if os.path.exists('log.txt'):
 		os.remove('log.txt')
 	random.seed()
-	target_result = read_target(target_file)
+	target_result = [0.3060340663]
 	original_array = read_conf(conf_file)
 	reach_lower_bound = False
-
-	for loop in range(len(original_array)):
-#	for fake_precision in range(2,65):
+	list_permutation_array = get_permutation(len(original_array))
+	loop = 0
+	for permutation_array in list_permutation_array:
+		loop +=1
+#	for fake_precision in range(2,65):	
 	#	precision_array = list(original_array)
 		precision_array = [64]*len(original_array)
-		permutation_array = get_permutation(len(original_array))
+		
 		for i in permutation_array:	
 #			previous_i = precision_array[i]
 			write_conf(conf_file,precision_array)
@@ -109,9 +110,11 @@ def write_log(precision_array, loop, permutation):
 		log_file.write('------------------------------------\n')
 
 def get_permutation(array_length):
-	result = range(array_length)
-	random.shuffle(result)
-	return result
+	return_list = []
+	perm_list = permutations(range(0,array_length))
+	for item in perm_list:
+		return_list.append(item)
+	return return_list
 
 def parse_output(line):
 	list_target = []
@@ -128,7 +131,7 @@ def parse_output(line):
 			#print "Failed to parse output string"
 			continue
 #		print list_target
-	return 	list_target[5:]	
+	return 	list_target	
 		
 def read_conf(conf_file_name):
 	#format a1,a2,a3,...
