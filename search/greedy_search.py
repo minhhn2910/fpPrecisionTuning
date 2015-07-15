@@ -1,8 +1,8 @@
+#!/usr/bin/python
 """ Python simplified version of greedy search. Assume that the program outputs directly to stdout
 Written by Minh Ho (minhhn2910@gmail.com)
 (c) Copyright, All Rights Reserved. NO WARRANTY.
 """
-#!/usr/bin/python
 import sys
 import subprocess
 import os
@@ -27,23 +27,26 @@ lower_precision_bound = 4
 
 minimum_cost = 1000000 #some abitrary big value for cost comparision
 
-minimum_configurations = [] #result of minimum precisions configurations
+#minimum_configurations = [] #result of minimum precisions configurations
+
 
   
-def update_error(num_vars,config_array,program):
+def update_error(conf_file, num_vars,config_array,program):
 #TODO: update error vector based on the increase of precision of vars
 	global error_reduced
 	min_error_index = 0
 	min_error =  1000000 #some abitrary big value for error comparision
 	for i in range(num_vars):
 		config_array[i] += 1
-		write_conf(config_array)
+		write_conf(conf_file,config_array)
 		error_reduced[i] = run_program(program)
 		if error_reduced[i] < min_error:
 			min_error_index = i 
 			min_error = error_reduced[i]
 		config_array[i] -= 1
 	config_array[min_error_index] += 1
+	print error_reduced, min_error
+	print config_array
 	return config_array, min_error
 	
 def isolated_var_analysis(conf_file,program):
@@ -57,7 +60,7 @@ def isolated_var_analysis(conf_file,program):
 		while ((boundary[UPPER_BOUND] - boundary[LOWER_BOUND]) != 1):
 			precision_array[i] = boundary[AVERAGE];
 			write_conf(conf_file,precision_array)
-			if (run_program(program) < error_rate):
+			if (run_program(program) <= error_rate):
 				boundary[UPPER_BOUND] = boundary[AVERAGE]
 			else:
 				boundary[LOWER_BOUND] = boundary[AVERAGE]	
@@ -65,7 +68,7 @@ def isolated_var_analysis(conf_file,program):
 		if boundary[UPPER_BOUND] < lower_precision_bound:
 			boundary[UPPER_BOUND] = lower_precision_bound
 		result_array[i] = boundary[UPPER_BOUND]
-		
+			
 	return result_array
 
 def greedy_search(conf_file,target_file, program):
@@ -74,7 +77,8 @@ def greedy_search(conf_file,target_file, program):
 	global current_error
 	global error_reduced #for debugging purpose
 	target_result = read_target(target_file)
-	
+	if os.path.exists('log.txt'):
+		os.remove('log.txt')	
 	min_conf = isolated_var_analysis(conf_file,program)
 	error_reduced = [0.00]*len(min_conf)
 	result_precision = [53]*len(min_conf)
@@ -82,7 +86,7 @@ def greedy_search(conf_file,target_file, program):
 	write_conf(conf_file,min_conf)
 	current_error = run_program(program)
 	while (current_error>error_rate):
-		current_conf, current_error = update_error(len(min_conf),program)
+		current_conf, current_error = update_error(conf_file,len(min_conf),current_conf,program)
 		#update_cost(precision_array)
 		write_log(current_conf, -1 , [str(current_error)])
 		#print 'write log '
@@ -92,7 +96,7 @@ def greedy_search(conf_file,target_file, program):
 def run_program(program):
 #	output = subprocess.Popen(['sh', 'run_lbm_mpfr.sh'], stdout=subprocess.PIPE).communicate()[0]
 	output = subprocess.Popen([program, ''], stdout=subprocess.PIPE).communicate()[0]
-	floating_result = float(output)
+	floating_result = [float(output)]
 	return check_output(floating_result,target_result)
 
 def check_output(floating_result,target_result):
@@ -149,6 +153,60 @@ def read_target(target_file):
 					print "Failed to parse target file"
 	return 	list_target	
 
+
+
+#def get_group_byIndex(current_index)
+#TODO: Return a group of indexes of vars associated with current_index as a result of dependency_graph	
+## all indices will need to be reduced by 1. as index 0 is reserved for all tempvars 
+
+
+#Done
+def build_dependency_path(graph_file):
+	#TODO: read the graph file in format : destination <--- list of vars that dest depends on
+	#for each var, construct a path, trace from that var until we find no reachable vars.
+	graph_nodes = []
+	reverse_graph_dict = {}
+	with open(graph_file) as data_lines:
+		for line in data_lines:
+			vars_array = line.replace('\n','').split(' ')
+			if len(vars_array) > 1 :
+				dest_node = vars_array[0]
+				for item in vars_array[1:]:
+					if reverse_graph_dict.has_key(item):
+						current_list = reverse_graph_dict.get(item)
+						if dest_node not in current_list:
+							current_list.append(dest_node)
+					else:
+						current_list = []
+						current_list.append(dest_node)
+						reverse_graph_dict[item]=current_list
+	for key in reverse_graph_dict.keys():
+		node_list = reverse_graph_dict.get(key)
+		new_node_list = list(node_list)
+		stop_condition = False
+		temp_node_list = list(node_list)
+		traversing_node_list = temp_node_list
+		while not stop_condition:
+			#broad first traverse. the final result(s) is/are the node that doesnt appear on keys list
+			temp_node_list = list(traversing_node_list)
+			traversing_node_list = []
+			for node in temp_node_list:
+				stop_condition = True
+				if reverse_graph_dict.has_key(node):
+					for item in reverse_graph_dict.get(node):
+						if item not in new_node_list:
+							stop_condition = False
+							new_node_list.append(item)
+							traversing_node_list.append(item)
+				#else = end of path
+		#remove key in new_node_list if it has
+		if key in new_node_list:
+			new_node_list.remove(key)							
+		reverse_graph_dict[key] = new_node_list
+	print reverse_graph_dict
+	return reverse_graph_dict
+	
+
 def write_conf(conf_file,original_array):
 	conf_string = ''
 	for i in original_array:
@@ -161,13 +219,14 @@ def main(argv):
 #	testoutput = subprocess.Popen(['cat', '../tests/output.txt'], stdout=subprocess.PIPE).communicate()[0]
 #	parse_output(testoutput)
 #	print parse_output('9.99999999999999944489e-1,9.99999999999999944489e-1,1.29999999999993168001e6,0,0,9.99998146097700935098e-1,1.04314342693500363562,1.30096331451181332761e6,0,1.27236149465357238661e-2,')
-	if len(argv) != 3 :
-		print "Usage: ./search.py config_file target_file program"
-	else :
-		if not ('/' in argv[2]):
-			argv[2] = './' + argv[2]
-
-		random_search(argv[0],argv[1],argv[2])
+	#~ if len(argv) != 3 :
+		#~ print "Usage: ./search.py config_file target_file program"
+	#~ else :
+		#~ if not ('/' in argv[2]):
+			#~ argv[2] = './' + argv[2]
+#~ 
+		#~ greedy_search(argv[0],argv[1],argv[2])
+		build_dependency_path('dependency_graph.txt')
 			 
 if __name__ == "__main__":
    main(sys.argv[1:])
