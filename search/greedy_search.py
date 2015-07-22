@@ -16,7 +16,7 @@ target_result=[]
 
 error_rate = 0.001
 
-#ZERO_error_rate=1e-8
+ZERO_error_rate=1e-8
 
 current_error = 0.00
 
@@ -105,13 +105,23 @@ def check_output(floating_result,target_result):
 		print 'Error : floating result has length: %s while target_result has length: %s' %(len(floating_result),len(target_result))
 		print floating_result
 		return 0.0
-	sum_error = 0.0	
+	max_error = 0.0
 	for i in range(len(floating_result)):
+		current_err = 0.0
 		if target_result[i] == 0.0:
-			sum_error += abs(floating_result[i])
+			#if target == 0.0 => floating_result <= ZERO_error_rate=
+                	# it's equivalent to abs((flt_rslt - ZERO_error_rate/2.0)/(ZERO_error_rate/2.0/error_rate))<=error_rate
+                	#it is correct if we return the left hand side as current_error
+                        current_err = abs((floating_result[i]-ZERO_error_rate/2.0)/(ZERO_error_rate/2.0/error_rate))
+			#sum_error += abs(floating_result[i])
 		else:
-			sum_error += abs((floating_result[i] - target_result[i])/target_result[i])
-	return sum_error
+			current_err = abs((floating_result[i] - target_result[i])/target_result[i])
+		if current_err > max_error:
+                        max_error = current_err
+	if max_error == 0.0:
+                print 'something went wrong in check_output func, error = 0.0'
+        return max_error
+
 
 
 def write_log(precision_array, loop, permutation):
