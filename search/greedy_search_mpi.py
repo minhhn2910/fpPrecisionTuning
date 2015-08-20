@@ -20,6 +20,9 @@ mpi_rank = MPI.COMM_WORLD.Get_rank()
 mpi_size = MPI.COMM_WORLD.Get_size()
 mpi_name = MPI.Get_processor_name()
 
+#number of variables
+total_num_var = 0
+
 
 target_result=[]
 
@@ -52,6 +55,8 @@ def refine_result (conf_file, num_vars,config_array,program):
 			if current_error > error_rate:
 				stop_error = True
 				config_array[i] +=1
+			if config_array[i]<=lower_precision_bound:
+				stop_error = True
 	print config_array
 	return config_array	
 
@@ -103,8 +108,16 @@ def update_error_master(conf_file, num_vars,config_array,program,dependency_grap
 		else:
 			mpi_comm.send(0, dest=dest_proc, tag=0) #signal finish proc.		
 		
-	
-			
+
+	if min_error == current_error: #infinite loop detected
+		min_error_index = num_vars+1 #increase all vars to break tie		
+		break_tie_conf_array = []
+		for item in config_array:
+			break_tie_conf_array.append(item+1)
+		write_conf(conf_file,config_array)
+                min_error = run_program(program)
+
+		
 	print 'min error index ' + str(min_error_index)
 	final_increase_list = get_group_byIndex(min_error_index,dependency_graph)
 	for index in final_increase_list:
@@ -223,6 +236,7 @@ def greedy_search_master(conf_file, program):
 #TODO: search from min_conf, increase each vars a time so that the error_Reduced is maximum	
 	global target_result
 	global current_error
+	global total_num_var
 	global error_reduced #for debugging purpose
 	dependency_graph = build_dependency_path('dependency_graph.txt')
 	
@@ -238,6 +252,7 @@ def greedy_search_master(conf_file, program):
 	error_reduced = [0.00]*len(min_conf)
 	result_precision = [53]*len(min_conf)
 	current_conf = list(min_conf)
+	total_num_var = len(min_conf)
 	print 'min_conf found ------------'
 	print min_conf 
 	
@@ -268,6 +283,7 @@ def greedy_search_worker(conf_file, program):
 	global target_result
 	global current_error
 	global error_reduced #for debugging purpose
+	global total_num_var
 	print "worker launched %s"%(mpi_name)
 	min_conf = []
 	current_conf = []
@@ -278,6 +294,7 @@ def greedy_search_worker(conf_file, program):
 	
 	min_conf = mpi_comm.bcast(min_conf, root=0)
 	current_conf = min_conf
+	total_num_var = len(min_conf)
 	write_conf(conf_file,min_conf)
 	current_error = run_program(program)
 	while (current_error>error_rate):
@@ -372,15 +389,17 @@ def read_target(target_file):
 
 #done
 def get_group_byIndex(current_index,dependency_graph):
-#TODO: Return a group of indexes of vars associated with current_index as a result of dependency_graph	
+#TODO: Return a group of indexes of vars associated with current_index as a result of dependency_graph  
 ## all indices will need to be reduced by 1. as index 0 is reserved for all tempvars 
-	result = []
-	result.append(current_index)
-	if dependency_graph.has_key(str(current_index)):
-		for item in dependency_graph.get(str(current_index)):
-			result.append(int(item))
-	return result
-	
+        result = []
+        if (current_index >= total_num_var): #specific case, return all vars as a group
+                result = range(total_num_var)
+        else:
+                result.append(current_index)
+                if dependency_graph.has_key(str(current_index)):
+                        for item in dependency_graph.get(str(current_index)):
+                                result.append(int(item))
+        return result
 #Done
 def build_dependency_path(graph_file):
 	#TODO: read the graph file in format : destination <--- list of vars that dest depends on
