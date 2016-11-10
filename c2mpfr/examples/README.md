@@ -2,14 +2,14 @@ Usage of c2mpfr tool :
 ```
 ./c2mpfr.py [source file] [ignore_tempvar_flag]
 ```
-------
+***
 Example:
 
 ```
 ./c2mpfr.py test.c
 ```
 convert test.c into mpfr version, treating all temporary variables as 1 variable (sharing 1 precision)
-------
+***
 ```
 ./c2mpfr.py test.c ignore
 ```
