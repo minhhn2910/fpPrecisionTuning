@@ -26,7 +26,7 @@ example: run the script with 4 threads, 1 master and 3 workers, searching on the
 Seed_number is unused for regular programs.
 It will be used and this script will be automatically called when we are running statistics guided refining process (statistics_guided_search.py). (seed_number) will be passed to the program to generate random inputs.
 
-####statistics_guided_search.py
+###statistics_guided_search.py
 
 You can modify TARGET_SQNR to change the expected SQNR. Other variable at the beginning of the code can also changed, please refer to the comments in the code for more information
 
@@ -38,6 +38,8 @@ example: run the precision tuning tool with statistics guided refinement process
 
 `./statistics_guided_search.py test_program test_mpfr`
 
-###important:
+***
+
+##Important
 
 This guide may not be completed and easy to setup on your machine. In any case, please don't hesitate to open issues here or contact me at minhhn2910(at)gmail.com for support.
