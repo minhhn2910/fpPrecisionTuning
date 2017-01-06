@@ -7,3 +7,4 @@ There is no restriction on version of python. But this repo works best (tested) 
 ## DistributedSearch
   Comprises the distributed algorithm using mpi to find the near-optimal precision for each floating-point variable of the given program.
   The searching script then will be used in the refining process to make the final output satisfy some given statistical features e.g. Average error over an input domain must be less than \epsilon.
+  Go to PrecisionAnalysis/README.md for information regarding using this set of scripts.
