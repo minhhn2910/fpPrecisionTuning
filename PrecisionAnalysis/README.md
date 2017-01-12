@@ -40,6 +40,10 @@ example: run the precision tuning tool with statistics guided refinement process
 
 ***
 
+To try the searching script with sample mpfr programs & setup script, please go to the folder `examples\` in this directory for further instruction
+
+***
+
 ##Important
 
 This guide may not be completed and easy to setup on your machine. In any case, please don't hesitate to open issues here or contact me at minhhn2910(at)gmail.com for support.
