@@ -2,6 +2,7 @@ Usage of c2mpfr tool :
 ```
 ./c2mpfr.py [source file] [ignore_tempvar_flag]
 ```
+IMPORTANT : DONT Run `python c2mpfr.py .... ` as it wont work on some systems, you must run as the above. 
 ***
 Example:
 
