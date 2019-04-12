@@ -21,3 +21,16 @@ There is no restriction on version of python. But this repo works best (tested) 
 ## Publication
 
   Ho, N.M., Manogaran, E., Wong, W.F. and Anoosheh, A., 2017, January. Efficient floating point precision tuning for approximate computing. In Design Automation Conference (ASP-DAC), 2017 22nd Asia and South Pacific (pp. 63-68). IEEE.
+
+Bibtex: 
+
+```
+@inproceedings{ho2017efficient,
+  title={Efficient floating point precision tuning for approximate computing},
+  author={Ho, Nhut-Minh and Manogaran, Elavarasi and Wong, Weng-Fai and Anoosheh, Asha},
+  booktitle={2017 22nd Asia and South Pacific Design Automation Conference (ASP-DAC)},
+  pages={63--68},
+  year={2017},
+  organization={IEEE}
+}
+```
