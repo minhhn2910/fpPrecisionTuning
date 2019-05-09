@@ -7,7 +7,7 @@ To run the original code (in file fp_precision.c) with errror threshold = alpha 
 To generate all the required files in this folder, please follow the 4-steps procedures: 
 ### Step 1: Output format
 Make sure the code output directly to stdout so the tool can compare the results. 
-`fp_precision.c` needs to initialize some input and output `d` via printf as modified in `fp_precision_modified.c`
+`fp_precision.c` needs to initialize some input and print the output `d` via printf as modified in `fp_precision_modified.c`
 ### Step 2: Convert to MPFR version
 (this is not required if the original code already used other custom arithmetic library as flexfloat [https://github.com/oprecomp/flexfloat](https://github.com/oprecomp/flexfloat)). In this case, we need to convert since the original code is vanilla C. Steps to convert to mpfr:
 from this directory, cd back to the `fpPrecisionTuning/c2mpfr/examples` folder where the c2mpfr.py script is located. 
