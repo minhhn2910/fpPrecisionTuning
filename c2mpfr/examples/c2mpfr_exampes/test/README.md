@@ -10,11 +10,14 @@ Make sure the code output directly to stdout so the tool can compare the results
 `fp_precision.c` needs to initialize some input and print the output `d` via printf as modified in `fp_precision_modified.c`
 ### Step 2: Convert to MPFR version
 (this is not required if the original code already used other custom arithmetic library as flexfloat [https://github.com/oprecomp/flexfloat](https://github.com/oprecomp/flexfloat)). In this case, we need to convert since the original code is vanilla C. Steps to convert to mpfr:
-from this directory, cd back to the `fpPrecisionTuning/c2mpfr/examples` folder where the c2mpfr.py script is located. 
+
+From this directory, cd back to the `fpPrecisionTuning/c2mpfr/examples` folder where the c2mpfr.py script is located:
 * `cd ../../../`
-run the conversion, there will be plenty of files generated.
+
+Then run the conversion, there will be plenty of files generated:
 * `./c2mpfr examples/c2mpfr_examples/test/fp_precision_modified.c`
-copy the required files for searching (you can simply copy every generated file): 
+
+Copy the required files for searching (you can simply copy every generated file): 
 * `cp converted2mpfr.c examples/c2mpfr_examples/test/`
 * `cp dependency_graph.txt examples/c2mpfr_examples/test/`
 * `cp config_file.txt examples/c2mpfr_examples/test/`
