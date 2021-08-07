@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 """ Python version of statistics guided search. Assume that the program outputs directly to stdout
-Written by Minh Ho (minhhn2910(at)gmail.com)
+Written by Minh Ho
 (c) Copyright, All Rights Reserved. NO WARRANTY.
 This algorithm makes use of 2 files, greedy_search_mpi.py and statistics_analysis.py
 I didn't include the two files here and use their functions because they are executable for their own purpose 
