@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """ Python simplified version of greedy search. Assume that the program outputs directly to stdout
-Written by Minh Ho (minhhn2910(at)gmail.com)
+Written by Minh Ho
 (c) Copyright, All Rights Reserved. NO WARRANTY.
 """
 
