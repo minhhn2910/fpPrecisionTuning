@@ -67,15 +67,15 @@ def refine_result(
             write_conf(conf_file, config_array)
             current_error = run_program(program)
             if DEBUG:
-                print current_error
-                print i
+                print(current_error)
+                print(i)
             if current_error > error_rate:
                 stop_error = True
                 config_array[i] += 1
             if config_array[i] <= lower_precision_bound:
                 stop_error = True
 
-    print config_array
+    print(config_array)
     return config_array
 
 
@@ -164,14 +164,14 @@ def update_error(
         min_error = run_program(program)
 
     if DEBUG:
-        print 'min error index ' + str(min_error_index)
+        print('min error index ' + str(min_error_index))
     final_increase_list = get_group_byIndex(min_error_index,
             dependency_graph)
     for index in final_increase_list:
         config_array[index] += 1
     if DEBUG:
-        print error_reduced, min_error
-        print config_array
+        print(error_reduced, min_error)
+        print(config_array)
 
     return (config_array, min_error)
 
@@ -195,7 +195,7 @@ def isolated_var_analysis(conf_file, program):
             else:
                 boundary[LOWER_BOUND] = boundary[AVERAGE]
             boundary[AVERAGE] = (boundary[UPPER_BOUND]
-                                 + boundary[LOWER_BOUND]) / 2
+                                 + boundary[LOWER_BOUND]) // 2
         if boundary[UPPER_BOUND] < lower_precision_bound:
             boundary[UPPER_BOUND] = lower_precision_bound
         send_back_result = boundary[UPPER_BOUND]
@@ -222,7 +222,7 @@ def refine_1st(
         boundary = [min_conf[working_index] - 1,
                     current_conf[working_index],
                     (current_conf[working_index]
-                    + min_conf[working_index]) / 2]
+                    + min_conf[working_index]) // 2]
         while boundary[UPPER_BOUND] - boundary[LOWER_BOUND] != 1:
             precision_array[working_index] = boundary[AVERAGE]
             write_conf(conf_file, precision_array)
@@ -231,7 +231,7 @@ def refine_1st(
             else:
                 boundary[LOWER_BOUND] = boundary[AVERAGE]
             boundary[AVERAGE] = (boundary[UPPER_BOUND]
-                                 + boundary[LOWER_BOUND]) / 2
+                                 + boundary[LOWER_BOUND]) // 2
         if boundary[UPPER_BOUND] < lower_precision_bound:
             boundary[UPPER_BOUND] = lower_precision_bound
         send_back_result = boundary[UPPER_BOUND]
@@ -252,11 +252,11 @@ def greedy_search(conf_file, program, target_file):
     target_result = read_target(target_file)
 
     if DEBUG:
-        print target_result
+        print(target_result)
     if os.path.exists('log.txt'):
         os.remove('log.txt')
     if DEBUG:
-        print 'isolated_var_analysis ---------'
+        print('isolated_var_analysis ---------')
 
     min_conf = isolated_var_analysis(conf_file, program)
 
@@ -266,8 +266,8 @@ def greedy_search(conf_file, program, target_file):
     total_num_var = len(min_conf)
 
     if DEBUG:
-        print 'min_conf found ------------'
-        print min_conf
+        print('min_conf found ------------')
+        print(min_conf)
 
     write_conf(conf_file, min_conf)
     current_error = run_program(program)
@@ -278,7 +278,7 @@ def greedy_search(conf_file, program, target_file):
         write_log(current_conf, -1, [str(current_error)])
 
         if DEBUG:
-            print 'step2 finished '
+            print('step2 finished ')
 
     global stop_condition
     stop_condition = False
@@ -291,8 +291,8 @@ def greedy_search(conf_file, program, target_file):
         min_conf = refine_1st(current_conf, min_conf, conf_file,
                 program)
         if DEBUG:
-            print '######################'
-            print 'refine 1pass ' + str(min_conf)
+            print('######################')
+            print('refine 1pass ' + str(min_conf))
 
         error_reduced = [0.00] * len(min_conf)
         result_precision = [24] * len(min_conf)
@@ -323,22 +323,22 @@ def greedy_search(conf_file, program, target_file):
         if sum(current_conf) == sum(previous_satisfied_conf):  # stop condition.
             stop_condition = True
             if DEBUG:
-                print 'current error ' + str(current_error)
+                print('current error ' + str(current_error))
 
         previous_satisfied_conf = list(current_conf)  # update the last conf
 
         #stop_condition = mpi_comm.bcast(stop_condition, root=0)
         if DEBUG:
-            print 'refine 2v pass ' + str(current_conf)
+            print('refine 2v pass ' + str(current_conf))
 
         # ############################################333
 
         if DEBUG:
-            print 'end of searching '
+            print('end of searching ')
 
   #      print "trying to refine result "
 # ....current_conf = refine_result (conf_file, len(min_conf),current_conf,program)
-    print str(current_conf)
+    print(str(current_conf))
     write_log(current_conf, -2, ['------Final result-------'])
 
 
@@ -348,6 +348,9 @@ def run_program(program):
 
     output = subprocess.Popen([program, '%s'%(SEED_NUMBER)],
                               stdout=subprocess.PIPE).communicate()[0]
+    
+    # Convert bytes to string in Python 3
+    output = output.decode('utf-8')
 
     # return float(output)
 
@@ -358,9 +361,9 @@ def run_program(program):
 
 def check_output(floating_result, target_result):
     if len(floating_result) != len(target_result):
-        print 'Error : floating result has length: %s while target_result has length: %s' \
-            % (len(floating_result), len(target_result))
-        print floating_result
+        print('Error : floating result has length: %s while target_result has length: %s' \
+            % (len(floating_result), len(target_result)))
+        print(floating_result)
         return 0.00
     signal_sqr = 0.00
     error_sqr = 0.00
@@ -400,7 +403,7 @@ def read_conf(conf_file_name):
                     if len(argument) > 0 and argument != '\n':
                         list_argument.append(int(argument))
                 except:
-                    print 'Failed to parse conf file'
+                    print('Failed to parse conf file')
     return list_argument
 
 
@@ -421,7 +424,7 @@ def read_target(target_file):
                     if len(target) > 0 and target != '\n':
                         list_target.append(float(target))
                 except:
-                    print 'Failed to parse target file'
+                    print('Failed to parse target file')
     return list_target
 
 
@@ -430,10 +433,10 @@ def read_target(target_file):
 def get_group_byIndex(current_index, dependency_graph):
     result = []
     if current_index >= total_num_var:  # specific case, return all vars as a group
-        result = range(total_num_var)
+        result = list(range(total_num_var))
     else:
         result.append(current_index)
-        if dependency_graph.has_key(str(current_index)):
+        if str(current_index) in dependency_graph:
             for item in dependency_graph.get(str(current_index)):
                 result.append(int(item))
     return result
@@ -451,17 +454,17 @@ def main(argv):
     global SEED_NUMBER
 
     if (len(argv) != 2):
-        print "\n ---------------------------------------------"
-        print "Usage: ./search.py seed_number program"
-        print "  config_file.txt contains the precision configuration of the mpfr program. This file is generated by c2mpfr.py tool"
-        print "  target.txt contains the exact result of the original program to compare this file is generated by the statistic_guided_search.py automatically"
-        print "  if you are not using the tool statistic_guided_search.py. You can just type ./original_program > target.txt to generate the target file"
-        print "  program must have the [program_name] mpfr version and [program_name].sh version"
-        print "  The .sh version will be used in different mpi processes"
-        print "  the content of [program_name].sh is to move to the current directory of each mpi process and execute the program"
-        print "  We need to do this because we have to run multiple instances of the program on different config.txt in different folder"
-        print "  Please see the sample .sh file for guidance, you only need to modify the ./program_name in the last line of .sh file "
-        print "---------------------------------------------\n"
+        print("\n ---------------------------------------------")
+        print("Usage: ./search.py seed_number program")
+        print("  config_file.txt contains the precision configuration of the mpfr program. This file is generated by c2mpfr.py tool")
+        print("  target.txt contains the exact result of the original program to compare this file is generated by the statistic_guided_search.py automatically")
+        print("  if you are not using the tool statistic_guided_search.py. You can just type ./original_program > target.txt to generate the target file")
+        print("  program must have the [program_name] mpfr version and [program_name].sh version")
+        print("  The .sh version will be used in different mpi processes")
+        print("  the content of [program_name].sh is to move to the current directory of each mpi process and execute the program")
+        print("  We need to do this because we have to run multiple instances of the program on different config.txt in different folder")
+        print("  Please see the sample .sh file for guidance, you only need to modify the ./program_name in the last line of .sh file ")
+        print("---------------------------------------------\n")
         exit()
     program = './' + argv[1] + '.sh'
     config_file = 'config_file.txt'
