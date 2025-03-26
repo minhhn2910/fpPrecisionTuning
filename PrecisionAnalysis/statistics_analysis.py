@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Python code for statistics analysis of error of a given program on different random inputs.
 usage ./statistics_analysis.py float_ver mpfr_ver range
 	float_ver : original version of the program which will be used as a reference.
@@ -33,17 +33,18 @@ mpi_name = MPI.Get_processor_name()
 
 def parse_output(line):
         list_target = []
-        line.replace(" ", "")
-        line.replace('\n','')
+        line = line.decode('utf-8')  # Decode bytes to string
+        line = line.replace(" ", "")
+        line = line.replace('\n','')
         #remove unexpected space
         array = line.split(',')
-#       print array
+#       print(array)
         for target in array:
                 try:
                         if(len(target)>0 and target!='\n'):
                                 list_target.append(float(target))
                 except:
-                        #print "Failed to parse output string"
+                        #print("Failed to parse output string")
                         continue
         return  list_target
         
@@ -59,17 +60,17 @@ def run_program(double_program,float_program, seed):
 def check_output(floating_result,target_result):
 #TODO: modify this func to return checksum error. instead of true and false. feed the checsum error to greedy decision func
 	if len(floating_result)== 0:
-			print 'error: len(result) = 0'
+			print('error: len(result) = 0')
 	if len(floating_result) != len(target_result):
-		print 'Error : float result has length: %s while double_result has length: %s' %(len(floating_result),len(target_result))
-		print floating_result
+		print('Error : float result has length: %s while double_result has length: %s' %(len(floating_result),len(target_result)))
+		print(floating_result)
 		return 0.0
 	signal_sqr = 0.0
 	error_sqr = 0.0	
 	for i in range(len(floating_result)):
 		signal_sqr += target_result[i]**2
 		error_sqr  += (floating_result[i]-target_result[i])**2
-		#~ print error_sqr
+		#~ print(error_sqr)
 	sqnr = 0.0
 	if error_sqr !=0.0:
 		sqnr = signal_sqr/error_sqr
@@ -94,7 +95,7 @@ def cal_sqnr_master (double_ver, float_ver, search_range):
 	recv_element = 0.0
 	sqnr_vector = []
 	for i in range(mpi_size-1):
-		#~ print "send from %d  to %d data %d"%(0,i+1,i)
+		#~ print("send from %d  to %d data %d"%(0,i+1,i))
 		if num_elements_sent < SEED_RANGE:
 			mpi_comm.send(i, dest=i+1, tag=1)
 			num_elements_sent += 1
@@ -110,7 +111,7 @@ def cal_sqnr_master (double_ver, float_ver, search_range):
 		current_sqnr = recv_element
 		sqnr_vector.append(current_sqnr)
 		if (i % TICK_CLOCK == 0) and DEBUG:
-			print "Tick %d %f"%(i,sum_sqnr/(i+1))
+			print("Tick %d %f"%(i,sum_sqnr/(i+1)))
 		#the below comparisions is not necessary on small SEED_RANGE, but will be efficient on big SEED_RANGE
 		if current_sqnr > max_sqnr : 
 			max_sqnr = current_sqnr
@@ -121,17 +122,17 @@ def cal_sqnr_master (double_ver, float_ver, search_range):
 		sum_sqnr += current_sqnr		
 		if num_elements_sent < SEED_RANGE: #send more to available proc
 			mpi_comm.send(num_elements_sent, dest=dest_proc, tag=1)
-			#~ print "send from %d  to %d data %d"%(0,dest_proc,num_elements_sent)
+			#~ print("send from %d  to %d data %d"%(0,dest_proc,num_elements_sent))
 			num_elements_sent += 1
 		else:
 			mpi_comm.send(0, dest=dest_proc, tag=0) #signal finish proc.	
 	
 	SQNR_pecentile = np.percentile(sqnr_vector, PERCENTILE_VALUE)		
-	print "[%d,%f,%d,%f,%f,%f]"%(min_seed,min_sqnr,max_seed,max_sqnr,sum_sqnr/SEED_RANGE,SQNR_pecentile)
+	print("[%d,%f,%d,%f,%f,%f]"%(min_seed,min_sqnr,max_seed,max_sqnr,sum_sqnr/SEED_RANGE,SQNR_pecentile))
 	if (DEBUG):
-		print " \n max: " + str(max_sqnr) + "  max_seed " + str(max_seed) 
-		print " \n min: " + str(min_sqnr) + "  min_seed " + str(min_seed)
-		print "\n average: "+ str(sum_sqnr/SEED_RANGE) 		
+		print(" \n max: " + str(max_sqnr) + "  max_seed " + str(max_seed))
+		print(" \n min: " + str(min_sqnr) + "  min_seed " + str(min_seed))
+		print("\n average: "+ str(sum_sqnr/SEED_RANGE))		
 	if(WRITE_LOG):
 		write_log(sqnr_vector)
 
@@ -154,7 +155,7 @@ def write_log(sqnr_vector):
 if __name__ == '__main__':
 	arguments = sys.argv[1:]
 	if len(arguments)!=3:
-		print "usage ./statistics_analysis.py float_ver mpfr_ver range"
+		print("usage ./statistics_analysis.py float_ver mpfr_ver range")
 		exit(0)
 	if not ('/' in arguments[0]):
 		arguments[0] = './' + arguments[0]

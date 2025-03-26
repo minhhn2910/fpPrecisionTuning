@@ -136,6 +136,7 @@ class CGenerator(object):
 #        fref = self._parenthesize_unless_simple(n.name)
 #        return fref + '(' + self.visit(n.args) + ')'
     def visit_FuncCall(self, n):
+ 
         temp_flag= self.interupted_flag
         if n.name.name == 'malloc' or n.name.name == '':
             self.interupted_flag = True
@@ -145,7 +146,14 @@ class CGenerator(object):
         visit_args_result = self.visit(n.args)
         self.func_call_flag = False
         self.interupted_flag = temp_flag
-        return fref + '(' + visit_args_result + ')'
+        # dump ouput stack ;
+        # print("visit func call output stack", self.output_stack)
+        s = ''
+        if n.name.name == "assert" and len(self.output_stack) != 0:
+            for item in self.output_stack:
+                s+= item
+            self.output_stack = []
+        return s + fref + '(' + visit_args_result + ')'
 
 
     def visit_UnaryOp(self, n):
@@ -250,8 +258,8 @@ class CGenerator(object):
 
         #~ Append_ouput= ""
         #print('-----')
-        print('debug binaryop')
-        print('left ' + lval_str + ' right ' +rval_str)
+        # print('debug binaryop')
+        # print('left ' + lval_str + ' right ' +rval_str)
         #print( ' interupted flag ' + str(self.interupted_flag))
         #print('-----')
         #print('left simple ' + str(self._is_simple_node(n.left)))
@@ -391,7 +399,7 @@ class CGenerator(object):
                     if typeleft!='mpfr' and typeright!='mpfr':
                        return '%s %s %s' % (lval_str, n.op, rval_str)
 
-
+                    
                     list_temp_output.extend(self.create_new_var())
                     #new_var just create in the stack
                     retStr = self.temp_variable_stack[-1]
@@ -403,6 +411,7 @@ class CGenerator(object):
                     for item_temp in list_temp_output:
                         if item_temp not in self.output_stack:
                             self.output_stack.append(item_temp)
+
 
         return '%s %s %s' % (lval_str, n.op, rval_str) if (retStr == None) else retStr
 
@@ -439,13 +448,9 @@ class CGenerator(object):
         return (is_array_ref,num_dimension,array_name)
 
     def visit_Assignment(self, n):
-#        rval_str = self._parenthesize_if(
-#                            n.rvalue,
-#                            lambda n: isinstance(n, c_ast.Assignment))
-#        return '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str)
-		#print(n.lvalue.subscript.value)
         is_array_ref, num_dimension, array_name = self.parse_arrayref(n.lvalue)
         lval_str = "None"
+        print("visit_Assignment", n.lvalue, n.rvalue)
         #~ print(str(is_array_ref) + " " + str(num_dimension) + " " + array_name)
         self.parsing_lhs = True
         temp_lval_str = self.visit(n.lvalue)
@@ -578,6 +583,7 @@ class CGenerator(object):
 
     ## New function for generating MPFR setter and arithmetic ops
     def MPFR_Helper(self, left_name, right_side):
+        print("MPFR_Helper", left_name, right_side)
         if not self.isMPFR(left_name):
             return None
 
@@ -812,6 +818,12 @@ class CGenerator(object):
         return 'config_vals[' + prec_var + ']'
 
     def isMPFR(self, varName):##
+        import inspect
+        caller = inspect.currentframe().f_back
+        caller_info = inspect.getframeinfo(caller)
+        print(f"isMPFR called by: {caller_info.function} at line {caller_info.lineno} - checking: {varName}, result: {varName in self.mpfr_vars}")
+   
+        print("isMPFR", varName, varName in self.mpfr_vars)
         varName = varName.replace('(','').replace(')','')
         return (varName in self.mpfr_vars)
 
@@ -824,6 +836,18 @@ class CGenerator(object):
             return True
         except ValueError:
             return False
+
+    def isMathLibCall(self, string):
+        """Check if string represents a C math library function call"""
+        math_funcs = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
+                      'sinh', 'cosh', 'tanh', 'exp', 'log', 'log10', 'pow',
+                      'sqrt', 'ceil', 'floor', 'fabs', 'fmod', 'round']
+        
+        # Check if string starts with any math function name followed by an opening parenthesis
+        for func in math_funcs:
+            if string.startswith(func + '(') and string.endswith(')'):
+                return True
+        return False
 
     #def visit_Decl(self, n, no_type=False):
         # no_type is used when a Decl is part of a DeclList, where the type is
@@ -853,7 +877,7 @@ class CGenerator(object):
         #~ pprint(vars(n))
         if  (isinstance(n.type, c_ast.FuncDecl)):
             print("---------check")
-
+        print("visit decl ")
         substring = None
         if  self.is_function_parameter:
             if isinstance(n.type, c_ast.TypeDecl) and hasattr(n.type.type, 'names'):
@@ -866,9 +890,10 @@ class CGenerator(object):
                     s += ';\n mpfr_set_d(%s,%s,MPFR_RNDZ);\n'%(new_var_name,n.type.declname)
                     self.output_stack.append(s)
             #~ self.func_arguments.append(n.type.type.names);
-
+        print("visit decl ", n)
         if isinstance(n.type, c_ast.TypeDecl) and hasattr(n.type.type, 'names') and (not self.is_function_parameter):# and self.current_function!='':
             if bool(set(n.type.type.names) & set(['double','float'])):
+                print("double float type")
                 if self.current_function!='':
                     new_var_name = '%s_%s'%(n.type.declname,self.current_function) #rename mpfr vars to var_funcname ; affects 4 lines below
                 else:
@@ -881,7 +906,6 @@ class CGenerator(object):
                 s += ';\n' + self._make_indent()
                 rhs = self.visit(n.init)
                 out_string = ''
-
                 if len(self.temp_variable_stack) !=0 and rhs == self.temp_variable_stack[-1]:
                     #undo the temp_var
                     #
@@ -900,17 +924,20 @@ class CGenerator(object):
                     substring = "mpfr_set(%s, %s, MPFR_RNDZ)" % (new_var_name, rhs)
                     return s
                 elif len(self.output_stack) !=0 :
+                    print("visit decl output stack", self.output_stack)
                     for item in self.output_stack:
                         s+= item
                     self.output_stack =[]
-                    return s
-                if self._is_simple_node(n.init) or self.isNegative(rhs):
+                    # return s
+
+                if self._is_simple_node(n.init) or self.isNegative(rhs) or "rand()" in rhs:
                     stype = ''
                     if self.isNum(rhs):
                         stype = '_d'
+                    elif self.isMathLibCall(rhs) or "rand()" in rhs:
+                        stype = '_d'  # Math library functions return double values
+
                     substring = "mpfr_set"+stype+"(%s, %s, MPFR_RNDZ)" % (new_var_name, rhs)
-                #~ else:
-                    #~ substring = self.MPFR_Helper(n.name, rhs)
 
                 if (substring != None):
                     return s + substring
@@ -1121,6 +1148,7 @@ class CGenerator(object):
         if self.current_function!='':
             return_type = self.func_list[self.current_function]
         s=''
+        print("visit return , output stack", self.output_stack)
         if n.expr:
             return_string = self.visit(n.expr)
             if len(self.output_stack) !=0 :
@@ -1224,10 +1252,12 @@ class CGenerator(object):
                 return_string = ""
                 for item in self.output_stack:
                     return_string += item
-                s+= return_string
                 self.output_stack = []
+            s+= return_string    
+                
         s += ')\n'
         s += self._generate_stmt(n.stmt, add_indent=True)
+
         return s
 
     def visit_DoWhile(self, n):
