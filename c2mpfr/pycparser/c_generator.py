@@ -15,7 +15,7 @@ class CGenerator(object):
         generic_visit.
     """
     floating_point_types = ['float','double']
-    tensors_list_float = [] #store only arrays, matrices pointers have float or double type. 
+    tensors_list_float = [] #store only arrays, matrices pointers have float or double type.
     tensors_list_float_2d = [] # store only 2d array, for ease of processing 2d array ref.
     temp_variable_stack = []
     output_stack = []   #store intermediate expressions to compute a statement
@@ -34,9 +34,9 @@ class CGenerator(object):
     parsing_lhs = False
     dependency_graph = {}
     vars_to_index_dict = {}
-    
+
     def __init__(self):
-        self.output = ''        
+        self.output = ''
         # Statements start with indentation of self.indent_level spaces, using
         # the _make_indent method
         #
@@ -48,14 +48,14 @@ class CGenerator(object):
 
         #Keep track of our converted variables for typechecking and dependencies
         self.mpfr_vars = dict()
-        
+
     def add_dependency(self, lhs, rhs):
-        if lhs == rhs: 
+        if lhs == rhs:
             return
         new_lhs = self.vars_to_index_dict[lhs]
         new_rhs = self.vars_to_index_dict[rhs]
-        #print 'call ' + lhs + ' ' +rhs
-        if self.dependency_graph.has_key(new_lhs): #key exists, add new item to current list
+        #print('call ' + lhs + ' ' +rhs)
+        if new_lhs in self.dependency_graph: #key exists, add new item to current list
             current_list = self.dependency_graph.get(new_lhs)
             if new_rhs not in current_list:
                 current_list.append(new_rhs)
@@ -63,14 +63,14 @@ class CGenerator(object):
             current_list = [] #create blank list
             current_list.append(new_rhs)
             self.dependency_graph[new_lhs] = current_list
-        print "add dependency " + lhs + " " + str(new_lhs) + " " + rhs + " " + str(new_rhs)   
-		
+        print("add dependency " + lhs + " " + str(new_lhs) + " " + rhs + " " + str(new_rhs))
+
     def _make_indent(self):
         return ' ' * self.indent_level
 
     def visit(self, node):
         method = 'visit_' + node.__class__.__name__
-        print method
+        print(method)
         return getattr(self, method, self.generic_visit)(node)
 
     def generic_visit(self, node):
@@ -86,7 +86,7 @@ class CGenerator(object):
     def visit_ID(self, n):
 #        return n.name
         temp_string = n.name +'_'+self.current_function
-        #print 'temp_string ' + temp_string
+        #print('temp_string ' + temp_string)
         if self.isMPFR(temp_string):
             if self.func_call_flag == True:
                 if self.lhs_mpfr == True and self.current_lhs != '':
@@ -96,7 +96,7 @@ class CGenerator(object):
                 return temp_string
         else:
             return n.name
-                
+
     def visit_Pragma(self, n):
         ret = '#pragma'
         if n.string:
@@ -114,17 +114,17 @@ class CGenerator(object):
         self.interupted_flag = temp_interupted_flag
         is_array_ref, num_dimension, array_name = self.parse_arrayref(n)
         no_mpfr_output = arrref + '[' + refVisitedString  + ']'
-        #print str(n.name.__class__)
+        #print(str(n.name.__class__))
         #pprint(dir(n.name))
-        print no_mpfr_output
-        print self.tensors_list_float_2d
-        print array_name
+        print(no_mpfr_output)
+        print(self.tensors_list_float_2d)
+        print(array_name)
         if ((num_dimension == 1 and ( not array_name.replace('_mpfr','').replace('_'+self.current_function,'') in self.tensors_list_float_2d)) or (num_dimension == 2) ) and is_array_ref and (not self.parsing_lhs) and (not self.func_call_flag) :
-            print "is instance"
-            #print array_name
+            print("is instance")
+            #print(array_name)
             extract_string = ";\n mpfr_set_d(%s,%s,MPFR_RNDZ);\n"%(array_name,no_mpfr_output)
             self.array_ref_output_stack.append(extract_string)
-            return array_name	
+            return array_name
         else:
             return no_mpfr_output
 
@@ -138,8 +138,8 @@ class CGenerator(object):
     def visit_FuncCall(self, n):
         temp_flag= self.interupted_flag
         if n.name.name == 'malloc' or n.name.name == '':
-            self.interupted_flag = True 
-        
+            self.interupted_flag = True
+
         self.func_call_flag = True #get double value back from mpfr. may need further work here to detect sqrt .... type
         fref = self._parenthesize_unless_simple(n.name)
         visit_args_result = self.visit(n.args)
@@ -169,21 +169,21 @@ class CGenerator(object):
             return '%s%s' % (n.op, operand)
 
     def is_int_String(self,string_val):
-        try: 
+        try:
             int(string_val)
             return True
         except ValueError:
             return False
     def is_float_String(self, string_val):
-        try: 
+        try:
             float(string_val)
             return True
         except ValueError:
-            return False        
+            return False
 
     def get_type (self,var_string):
         modified_var_string  = var_string.replace('+','').replace('-','') #handle unaryop
-        
+
         if self.isMPFR(modified_var_string):
             return 'mpfr'
         else :
@@ -194,31 +194,31 @@ class CGenerator(object):
                 else:
                     return temp_type
             elif self.is_int_String(modified_var_string):
-                return 'long'                           
+                return 'long'
             elif self.is_float_String(modified_var_string):
                 return 'float'
             else:
-                return 'undefined'        
+                return 'undefined'
     def create_new_var(self):
         #todo : enable config precision here
         return_string = []
-        new_var = self.generate_dummy_var() 
-        
+        new_var = self.generate_dummy_var()
+
         self.mpfr_vars[new_var]=[]
         self.temp_variable_stack.append(new_var)
         return_string.append('\n%smpfr_t %s;\n' %(self._make_indent()*2,new_var))
         return_string.append('%smpfr_init2 (%s, config_vals[0]);\n'%(self._make_indent()*2,new_var))
         return return_string
-    
+
     def process_array_ref(self,left_node, right_node,lval_str, rval_str):
         left_string = lval_str
         right_string = rval_str
-        print left_string + " " + right_string
-        if "->" not in left_string: #struct ref 
+        print(left_string + " " + right_string)
+        if "->" not in left_string: #struct ref
             if isinstance(left_node,c_ast.UnaryOp):
                 left_node = left_node.expr
-            #p#print (vars(left_node))
-            ##print 'left instance id ' + str( isinstance(left_node,c_ast.ArrayRef))
+            #p#print((vars(left_node)))
+            ##print('left instance id ' + str( isinstance(left_node,c_ast.ArrayRef)))
             if  isinstance(left_node,c_ast.ArrayRef):
                 if left_string.count('[')==1: #catch 1D array:
                     left_string =left_node.name.name
@@ -227,13 +227,13 @@ class CGenerator(object):
         if "->" not in right_string:
             if isinstance(right_node,c_ast.UnaryOp):
                 right_node = right_node.expr
-            ##print 'right instance id ' + str( isinstance(right_node,c_ast.ArrayRef))
-            if  isinstance(right_node,c_ast.ArrayRef):        
+            ##print('right instance id ' + str( isinstance(right_node,c_ast.ArrayRef)))
+            if  isinstance(right_node,c_ast.ArrayRef):
                 if right_string.count('[')==1:#catch 1D array:
                     right_string =right_node.name.name
                 elif right_string.count('[')==2: #catch 2D array
-                    right_string =right_node.name.name.name 
-        
+                    right_string =right_node.name.name.name
+
         return left_string,right_string
 
     def visit_BinaryOp(self, n):
@@ -249,17 +249,17 @@ class CGenerator(object):
         ##
 
         #~ Append_ouput= ""
-        #print '-----'
-        print 'debug binaryop'
-        print 'left ' + lval_str + ' right ' +rval_str
-        #print  ' interupted flag ' + str(self.interupted_flag)
-        #print '-----'
-        #print 'left simple ' + str(self._is_simple_node(n.left))
-        ##print isinstance(n.left,c_ast.UnaryOp)
-        #print 'right simple ' + str(self._is_simple_node(n.right))
-        ##print isinstance(n.right,c_ast.UnaryOp)
+        #print('-----')
+        print('debug binaryop')
+        print('left ' + lval_str + ' right ' +rval_str)
+        #print( ' interupted flag ' + str(self.interupted_flag))
+        #print('-----')
+        #print('left simple ' + str(self._is_simple_node(n.left)))
+        ##print(isinstance(n.left,c_ast.UnaryOp))
+        #print('right simple ' + str(self._is_simple_node(n.right)))
+        ##print(isinstance(n.right,c_ast.UnaryOp))
         #p#print(vars(n.right))
-        print self.interupted_flag 
+        print(self.interupted_flag)
         if self.interupted_flag == False:
             #preprocess array ref intermediate expressions
             num_array_ref = 0
@@ -271,77 +271,76 @@ class CGenerator(object):
             if (num_array_ref == 2) and (lval_str == rval_str): #special case, need to introduce intermediate var here.
                 list_temp_output.append(self.array_ref_output_stack.pop())
                 list_temp_output.extend(self.create_new_var())
-                rval_str = self.temp_variable_stack[-1]		
+                rval_str = self.temp_variable_stack[-1]
                 list_temp_output.append(self._make_indent()*2 + "mpfr_set(%s, %s, MPFR_RNDZ);\n" % (rval_str, lval_str))
-                list_temp_output.append(self.array_ref_output_stack.pop())                 		
+                list_temp_output.append(self.array_ref_output_stack.pop())
             else:
                 while (num_array_ref > 0):
                     list_temp_output.append(self.array_ref_output_stack.pop())
                     num_array_ref -= 1
             #end preprocessing
             if (isinstance(n.left,c_ast.Constant) and isinstance(n.right,c_ast.Constant)): #this case to reduce number of temp var ex 1.0 + 2.0 = 1 constant
-                return '%s %s %s' % (lval_str, n.op, rval_str) 
+                return '%s %s %s' % (lval_str, n.op, rval_str)
                 #~ list_temp_output = []
                 list_temp_output.extend(self.create_new_var())
                 retStr = self.temp_variable_stack[-1]
-                constant_str = '%s %s %s' % (lval_str, n.op, rval_str) 
+                constant_str = '%s %s %s' % (lval_str, n.op, rval_str)
                 list_temp_output.append(self._make_indent()*2+"mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (retStr, constant_str))
                 self.output_stack.extend(list_temp_output)
             elif n.op in '<=>==':
-                print "comparator, 2 nodes"
-                    
+                print("comparator, 2 nodes")
+
                 return_string = self.MPFR_Operation(None, n.op, lval_str, rval_str,'mpfr','mpfr')
-                    
+
                 if return_string !=None:
                     return_string += "\n//original  " + '%s %s %s' % (lval_str, n.op, rval_str) + "\n"
                     return return_string
-                #    self.output_stack.append(return_string)
-                    #print return_string
-                    #print self.output_stack
+                    #print(return_string)
+                    #print(self.output_stack)
             elif ((self._is_simple_node(n.right) or isinstance(n.right,c_ast.UnaryOp))and (self._is_simple_node(n.left) or isinstance(n.left,c_ast.UnaryOp)) ):
                 if n.op not in '<=>==': #it sucks here, need to handle %
-        
-                    #print '-----'
-                    print 'both simple node'
-                    print 'left ' + lval_str + ' right ' +rval_str
+
+                    #print('-----')
+                    print('both simple node')
+                    print('left ' + lval_str + ' right ' +rval_str)
                 # remove this condition/ proccess all kinds of expression    if self.isMPFR(lval_str) or self.isMPFR(rval_str):
                     #left_string,right_string = self.process_array_ref(n.left, n.right,lval_str, rval_str)
                     left_string = lval_str
                     right_string = rval_str
                     typeleft = self.get_type(left_string)
                     typeright = self.get_type(right_string)
-                    
+
                     #~ list_temp_output = []
-                    
-                    #p#print (vars(n.left.name))
+
+                    #p#print((vars(n.left.name)))
                     op1 = lval_str
                     op2 = rval_str
                     #if type
                     #be careful with append vs extend confusion in python list
-                    #print self.var_type_dict
-                    #print self.type_def_float
+                    #print(self.var_type_dict)
+                    #print(self.type_def_float)
                     if  (left_string in self.var_type_dict and (typeleft == 'float' or typeleft =='double')):# or (n.op =='%' and type_left != 'mpfr'):
                         list_temp_output.extend(self.create_new_var())
                         op1 = self.temp_variable_stack[-1]
                         list_temp_output.append(self._make_indent()*2+"mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (op1, lval_str))
                     if (right_string in self.var_type_dict and (typeright == 'float' or typeright =='double') ):# or (n.op =='%' and type_right != 'mpfr'):
                         list_temp_output.extend(self.create_new_var())
-                        op2 = self.temp_variable_stack[-1]  
-                        list_temp_output.append(self._make_indent()*2 + "mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (op2, rval_str) )    
-                    
+                        op2 = self.temp_variable_stack[-1]
+                        list_temp_output.append(self._make_indent()*2 + "mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (op2, rval_str) )
+
                     typeleft = self.get_type(op1)
                     typeright = self.get_type(op2)
-                    
-                    #print 'op1 ' + op1 
-                    #print 'op2 ' + op2
-                    #print 'simple left string ' + left_string
-                    #print 'simple right_string ' + right_string
-                    #print 'type left' + typeleft
-                    #print 'type right ' + typeright                     
+
+                    #print('op1 ' + op1)
+                    #print('op2 ' + op2)
+                    #print('simple left string ' + left_string)
+                    #print('simple right_string ' + right_string)
+                    #print('type left' + typeleft)
+                    #print('type right ' + typeright)
                     #create new temp var to save intermediate result
                     list_temp_output.extend(self.create_new_var())
                     retStr = self.temp_variable_stack[-1]
-                    #print "check newvar " + lval_str + '-----' + rval_str
+                    #print("check newvar " + lval_str + '-----' + rval_str)
                     return_string = self.MPFR_Operation(self.temp_variable_stack[-1], n.op, op1, op2,typeleft,typeright)
                     if return_string !=None:
                         list_temp_output.append("%s%s%s"%(self._make_indent()*2,return_string, ';\n' ))
@@ -349,23 +348,23 @@ class CGenerator(object):
                         retStr = '%s %s %s' % (lval_str, n.op, rval_str) #simplenode (long + int)
                     self.output_stack.extend(list_temp_output)
                     #not simple node anymore, it's return from accumulate temporary variables
-                    print self.output_stack                   
+                    print(self.output_stack)
                 #else:#assume binary comparator is for two mpfr_t vars/ Otherwise, debug later
                     #working here
 
-            else: 
-                print "else binary op"
+            else:
+                print("else binary op")
                 left_string,right_string = self.process_array_ref(n.left, n.right,lval_str, rval_str)
-                        
+
                 typeleft = self.get_type(left_string)
                 typeright = self.get_type(right_string)
 
                 if typeleft == 'mpfr' or typeright=='mpfr' or (typeleft == 'float' or typeleft =='double') or (typeright == 'float' or typeright =='double'):
-                    
+
 
                     #~ list_temp_output = []
-                    
-                    #p#print (vars(n.left.name))
+
+                    #p#print((vars(n.left.name)))
                     op1 = lval_str
                     op2= rval_str
                     #if type
@@ -377,27 +376,27 @@ class CGenerator(object):
                         list_temp_output.append(self._make_indent()*2+"mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (op1, lval_str))
                     if (right_string in self.var_type_dict and (typeright == 'float' or typeright =='double') ):# or (n.op =='%' and typeright != 'mpfr'):
                         list_temp_output.extend(self.create_new_var())
-                        op2 = self.temp_variable_stack[-1]  
-                        list_temp_output.append(self._make_indent()*2 + "mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (op2, rval_str) )    
-                    
+                        op2 = self.temp_variable_stack[-1]
+                        list_temp_output.append(self._make_indent()*2 + "mpfr_set_d(%s, %s, MPFR_RNDZ);\n" % (op2, rval_str) )
+
                     typeleft = self.get_type(op1)
                     typeright = self.get_type(op2)
-                    
-                    #print 'type left' + typeleft
-                    #print 'type right ' + typeright  
-                    #print 'else left string ' + left_string
-                    #print 'else right_string ' + right_string 
+
+                    #print('type left' + typeleft)
+                    #print('type right ' + typeright)
+                    #print('else left string ' + left_string)
+                    #print('else right_string ' + right_string)
                     #create new temp var to save intermediate result
                     #After processing, if neither is mpfr, then return (because it's series of constants or unknown type)
                     if typeleft!='mpfr' and typeright!='mpfr':
                        return '%s %s %s' % (lval_str, n.op, rval_str)
-                    
-                    
+
+
                     list_temp_output.extend(self.create_new_var())
-                    #new_var just create in the stack 
+                    #new_var just create in the stack
                     retStr = self.temp_variable_stack[-1]
-                    
-                    #print "check newvar " + lval_str + '-----' + rval_str
+
+                    #print("check newvar " + lval_str + '-----' + rval_str)
                     return_string = self.MPFR_Operation(self.temp_variable_stack[-1], n.op, op1, op2,typeleft,typeright)
                     if return_string !=None:
                         list_temp_output.append("%s%s%s"%(self._make_indent()*2,return_string, ';\n' ))
@@ -405,28 +404,28 @@ class CGenerator(object):
                         if item_temp not in self.output_stack:
                             self.output_stack.append(item_temp)
 
-        return '%s %s %s' % (lval_str, n.op, rval_str) if (retStr == None) else retStr        
-        
+        return '%s %s %s' % (lval_str, n.op, rval_str) if (retStr == None) else retStr
+
     def parse_arrayref(self, node):
-        #parse array, return mpfr temp var for an array if node is arrayRef	
+        #parse array, return mpfr temp var for an array if node is arrayRef
         is_array_ref = False
         num_dimension = 0
         array_name = "None"
         if isinstance(node, c_ast.ArrayRef):
-            #print "array ref assignment lhs"
+            #print("array ref assignment lhs")
             #pprint(dir(node.name))
-            #print str(node.show.__class__)
-            #print str(node.coord)
+            #print(str(node.show.__class__))
+            #print(str(node.coord))
             temp_array_name = ''
             if isinstance(node.name, c_ast.ArrayRef):
-                print "2d array ref"
-                print node.name.name.name
+                print("2d array ref")
+                print(node.name.name.name)
                 num_dimension = 2
                 temp_array_name = node.name.name.name
                 #return (True,2,node.name.name.name)
             elif isinstance(node.name, c_ast.ID):
-                print "1d array ref"
-                print node.name.name
+                print("1d array ref")
+                print(node.name.name)
                 num_dimension = 1
                 temp_array_name = node.name.name
                #return (True,1,node.name.name)
@@ -444,33 +443,33 @@ class CGenerator(object):
 #                            n.rvalue,
 #                            lambda n: isinstance(n, c_ast.Assignment))
 #        return '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str)
-		#print n.lvalue.subscript.value	
+		#print(n.lvalue.subscript.value)
         is_array_ref, num_dimension, array_name = self.parse_arrayref(n.lvalue)
         lval_str = "None"
-        #~ print str(is_array_ref) + " " + str(num_dimension) + " " + array_name 
+        #~ print(str(is_array_ref) + " " + str(num_dimension) + " " + array_name)
         self.parsing_lhs = True
         temp_lval_str = self.visit(n.lvalue)
         self.parsing_lhs = False
-        if is_array_ref:   
+        if is_array_ref:
             lval_str = array_name
         else:
             lval_str = temp_lval_str
-        #~ print str(is_array_ref) + " " + str(num_dimension) + " " + array_name 
+        #~ print(str(is_array_ref) + " " + str(num_dimension) + " " + array_name)
         if (self.isMPFR(lval_str) and 'temp_var_' not in lval_str):
             self.lhs_mpfr = True
             self.current_lhs = lval_str
         rval_str = self._parenthesize_if(
                             n.rvalue,
                             lambda n: isinstance(n, c_ast.Assignment))
-       # self.interupted_flag = False 
+       # self.interupted_flag = False
         out_string = ""
-        #~ print "debug_assigment -- left " + lval_str + "  right   "+rval_str  + "  ops  " +n.op
-        if len(self.array_ref_output_stack) !=0 : 
-            out_string+='//array_ref_output_stack != null from parsing right hand side, dump all itermediate operations here\n' 
+        #~ print("debug_assigment -- left " + lval_str + "  right   "+rval_str  + "  ops  " +n.op)
+        if len(self.array_ref_output_stack) !=0 :
+            out_string+='//array_ref_output_stack != null from parsing right hand side, dump all itermediate operations here\n'
             for item in self.array_ref_output_stack:
                 out_string+= item
             self.array_ref_output_stack =[]
-                     
+
         self.lhs_mpfr = False
         self.current_lhs = ''
         if self.isMPFR(lval_str) and self.isMPFR(rval_str):
@@ -479,24 +478,24 @@ class CGenerator(object):
                 #little trick here, replace the last line with lval
                     ##
                 if len(self.temp_variable_stack) !=0 and  rval_str == self.temp_variable_stack[-1]:
-                    
+
                     for item in self.output_stack[:-3]:
-                        #print item
+                        #print(item)
                         out_string += item
                     out_string += self.output_stack[len(self.output_stack)-1].replace(rval_str,lval_str)
                     self.output_stack = []
                     self.temp_variable_stack.pop()
                     self.dummy_number= self.dummy_number-1
-                    
+
                     #return out_string #delete ;\n
                 else:
                     out_string += "mpfr_set(%s, %s, MPFR_RNDZ)" % (lval_str, rval_str)
-            
+
             else:
                 #~ out_string = ""
                 for item in self.output_stack:
                     out_string += item
-                #print " += ops "
+                #print(" += ops ")
                 out_string += self._make_indent() +self.MPFR_Operation(lval_str, n.op[0], lval_str, rval_str, 'mpfr', 'mpfr')
                 self.output_stack = []
                 #return out_string
@@ -524,7 +523,7 @@ class CGenerator(object):
             if is_array_ref :
                 out_string += ";\n" + self._make_indent() + "%s = mpfr_get_d(%s, MPFR_RNDZ)" %(temp_lval_str,lval_str)
             return out_string
-        elif self.isMPFR(lval_str) and (not self.isMPFR(rval_str)):           
+        elif self.isMPFR(lval_str) and (not self.isMPFR(rval_str)):
             if n.op == '=':
                 stype='_d'
                 out_string +=  "mpfr_set"+stype+"(%s, %s, MPFR_RNDZ)" % (lval_str, rval_str)
@@ -544,20 +543,20 @@ class CGenerator(object):
             if is_array_ref :
                 out_string += ";\n" + self._make_indent() + "%s = mpfr_get_d(%s, MPFR_RNDZ)" %(temp_lval_str,lval_str)
             return out_string
-            
+
         elif (not self.isMPFR(lval_str)) and  self.isMPFR(rval_str):
             ##doesn't control left hand side is float or long, int now, just float
-            pre_output = '' 
+            pre_output = ''
             for item in self.output_stack:
                 pre_output += item
-            
+
             self.output_stack=[]
-            
+
             right_output = "mpfr_get_d(%s, MPFR_RNDZ)" % ( rval_str)
             return pre_output + '\n' + '%s %s %s' %(lval_str, n.op, right_output)
 
         elif (not self.isMPFR(lval_str)) and (not self.isMPFR(rval_str)):
-            #print ' n.op != = or not self.isMPFR(lval_str)'
+            #print(' n.op != = or not self.isMPFR(lval_str)')
             return '%s %s %s' % (lval_str, n.op, rval_str)
         #return '%s %s %s %s' % (out_string,lval_str, n.op, rval_str)
         retStr = self.MPFR_Helper(lval_str, rval_str)
@@ -652,11 +651,11 @@ class CGenerator(object):
                 if self.lhs_mpfr == True and self.current_lhs!='' and 'temp_var_' not in opd1 :
                     self.add_dependency(self.current_lhs,opd1.replace('+','').replace('-','').replace('(','').replace(')',''))
                 if '+' in opd1:
-                    my_opd1 = opd1.replace('+','') 
+                    my_opd1 = opd1.replace('+','')
                    # my_type1 = self.get_type (my_opd1) #get type again, it might be wrong outside
-                    
+
                 if '-' in opd1:#new tempvar + neg
-                    my_opd1 = opd1.replace('-','') 
+                    my_opd1 = opd1.replace('-','')
                     list_temp_output = []
                     list_temp_output.extend(self.create_new_var())
                     new_var = self.temp_variable_stack[-1]
@@ -672,12 +671,12 @@ class CGenerator(object):
                     #type2 = self.get_type (opd2)
                 if '-' in opd2:
                     my_opd2 = opd2.replace('-','')
-                    #type2 = self.get_type (opd2)                
+                    #type2 = self.get_type (opd2)
                     if op == '+':
                         my_op = '-'
                     if op == '-':
                         my_op = '+'
-            #print 'op1 op  op2  type1 typ2   %s  %s  %s   %s   %s '%(my_opd1,my_op,my_opd2,type1, type2)
+            #print('op1 op  op2  type1 typ2   %s  %s  %s   %s   %s '%(my_opd1,my_op,my_opd2,type1, type2))
             #further uz *-uy ? grammatically wrong
             if op == '+':
                 if(type1 != 'mpfr'):
@@ -689,7 +688,7 @@ class CGenerator(object):
                     elif 'float' in type1 or 'double' in type1 :
                         return result_string +'mpfr_add_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd2, my_opd1)
                     else:
-                        #print 'error , cannot get data type info of '+ type1
+                        #print('error , cannot get data type info of '+ type1)
                         return result_string +'mpfr_add_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd2, my_opd1)
                 elif(type2 != 'mpfr'):
                     #no need to reverse, the 1st op is mpfr_t already
@@ -700,7 +699,7 @@ class CGenerator(object):
                     elif 'float' in type2 or 'double' in type2:
                         return result_string +'mpfr_add_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                     else:
-                        #print 'error , cannot get data type info of '+ type2
+                        #print('error , cannot get data type info of '+ type2)
                         return result_string +'mpfr_add_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
 
                 else:
@@ -714,7 +713,7 @@ class CGenerator(object):
                     elif 'float' in type1 or 'double' in type1:
                         return result_string +'mpfr_d_sub(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                     else:
-                        #print 'error , cannot get data type info of '+ type1
+                        #print('error , cannot get data type info of '+ type1)
                         return result_string +'mpfr_d_sub(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                 elif(type2 != 'mpfr'):
                     if 'unsigned' in type2:
@@ -724,7 +723,7 @@ class CGenerator(object):
                     elif 'float' in type2 or 'double' in type2:
                         return result_string +'mpfr_sub_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                     else:
-                        #print 'error , cannot get data type info of '+ type2
+                        #print('error , cannot get data type info of '+ type2)
                         return result_string +'mpfr_sub_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
 
                 else:
@@ -739,7 +738,7 @@ class CGenerator(object):
                     elif 'float' in type1 or 'double' in type1:
                         return result_string +'mpfr_mul_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd2, my_opd1)
                     else:
-                        #print 'error , cannot get data type info of '+ type1
+                        #print('error , cannot get data type info of '+ type1)
                         return result_string +'mpfr_mul_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd2, my_opd1)
                 elif(type2 != 'mpfr'):
                     #no need to reverse, the 1st op is mpfr_t already
@@ -750,7 +749,7 @@ class CGenerator(object):
                     elif 'float' in type2 or 'double' in type2:
                         return result_string +'mpfr_mul_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                     else:
-                        #print 'error , cannot get data type info of '+ type2
+                        #print('error , cannot get data type info of '+ type2)
                         return result_string +'mpfr_mul_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                 else:
                     return result_string +'mpfr_mul(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
@@ -763,7 +762,7 @@ class CGenerator(object):
                     elif 'float' in type1 or 'double' in type1:
                         return result_string +'mpfr_d_div(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                     else:
-                        #print 'error , cannot get data type info of '+ type1
+                        #print('error , cannot get data type info of '+ type1)
                         return result_string +'mpfr_d_div(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                 elif(type2 != 'mpfr'):
                     if 'unsigned' in type2:
@@ -773,7 +772,7 @@ class CGenerator(object):
                     elif 'float' in type2 or 'double' in type2:
                         return result_string +'mpfr_div_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                     else:
-                        #print 'error , cannot get data type info of '+ type2
+                        #print('error , cannot get data type info of '+ type2)
                         return result_string +'mpfr_div_d(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
                 else:
                     return result_string +'mpfr_div(%s, %s, %s, MPFR_RNDZ)' % (dest, my_opd1, my_opd2)
@@ -781,7 +780,7 @@ class CGenerator(object):
                     return result_string + 'mpfr_fmod(%s, %s, %s, MPFR_RNDZ)'%(dest, my_opd1, my_opd2)
         elif (self.isMPFR(opd1) and self.isMPFR(opd2)):
             #self.output_stack.append
-            return '(mpfr_cmp(%s,%s) %s 0)'%(opd1,opd2, op)         
+            return '(mpfr_cmp(%s,%s) %s 0)'%(opd1,opd2, op)
             #~ if op == '==':
                 #~ return 'mpfr_equal_p(%s, %s)' % (opd1, opd2)
             #~ elif op == '>':
@@ -793,7 +792,7 @@ class CGenerator(object):
             #~ elif op == '>=' or op == '=>':
                 #~ return 'mpfr_greaterequal_p(%s, %s)' % (opd1, opd2)
         elif (self.isMPFR(opd1) and (not self.isMPFR(opd2))):
-            return '(mpfr_cmp_d(%s,%s) %s 0)'%(opd1,opd2, op) 
+            return '(mpfr_cmp_d(%s,%s) %s 0)'%(opd1,opd2, op)
         elif (not self.isMPFR(opd1) and self.isMPFR(opd2)):
             if '<' in op:
                 return '(mpfr_cmp_d(%s,%s) %s 0)'%(opd2,opd1, op.replace('<','>')) #reverse ops
@@ -841,8 +840,8 @@ class CGenerator(object):
         s = 'mpfr_t %s;\n' % new_var_name
         self.vars_to_index_dict[new_var_name] = str(self.prec_number-1)
         s += self._make_indent() + 'mpfr_init2(%s, %s);\n' % (new_var_name, self.generate_precision())
-        self.mpfr_vars[new_var_name] = []   
-        
+        self.mpfr_vars[new_var_name] = []
+
         return s
 
     def visit_Decl(self, n, no_type=False):
@@ -853,8 +852,8 @@ class CGenerator(object):
         ##
         #~ pprint(vars(n))
         if  (isinstance(n.type, c_ast.FuncDecl)):
-            print "---------check"
-            
+            print("---------check")
+
         substring = None
         if  self.is_function_parameter:
             if isinstance(n.type, c_ast.TypeDecl) and hasattr(n.type.type, 'names'):
@@ -862,12 +861,12 @@ class CGenerator(object):
                     if self.current_function!='':
                         new_var_name = '%s_%s'%(n.type.declname,self.current_function) #rename mpfr vars to var_funcname ; affects 4 lines below
                     else:
-                        new_var_name = n.type.declname   
+                        new_var_name = n.type.declname
                     s = self.init_mpfr_var(new_var_name)
                     s += ';\n mpfr_set_d(%s,%s,MPFR_RNDZ);\n'%(new_var_name,n.type.declname)
                     self.output_stack.append(s)
-            #~ self.func_arguments.append(n.type.type.names);         
-        
+            #~ self.func_arguments.append(n.type.type.names);
+
         if isinstance(n.type, c_ast.TypeDecl) and hasattr(n.type.type, 'names') and (not self.is_function_parameter):# and self.current_function!='':
             if bool(set(n.type.type.names) & set(['double','float'])):
                 if self.current_function!='':
@@ -878,7 +877,7 @@ class CGenerator(object):
 
                 if not n.init:
                     return s
-                
+
                 s += ';\n' + self._make_indent()
                 rhs = self.visit(n.init)
                 out_string = ''
@@ -887,7 +886,7 @@ class CGenerator(object):
                     #undo the temp_var
                     #
                     for item in self.output_stack[:-3]:
-                        #print item
+                        #print(item)
                         out_string += item
                     out_string += self.output_stack[len(self.output_stack)-1].replace(rhs,new_var_name)
                     self.output_stack = []
@@ -921,17 +920,17 @@ class CGenerator(object):
         #handle 1D array
         is_tensor_float = False
         if isinstance(n.type, c_ast.PtrDecl) or isinstance(n.type, c_ast.ArrayDecl):
-            #pprint (dir(n.type.type.type))i
+            #pprint((dir(n.type.type.type))i)
             if isinstance(n.type.type.type, c_ast.IdentifierType):
                 #1D array
-                #print str(n.type.type.type.names)
-                if n.type.type.type.names[0] in self.floating_point_types : 
+                #print(str(n.type.type.type.names))
+                if n.type.type.type.names[0] in self.floating_point_types :
                     self.tensors_list_float.append(str(n.name))
                     is_tensor_float = True
             elif isinstance(n.type.type.type.type, c_ast.IdentifierType):
                 #2d array
-                print str(n.type.type.type.type.names)
-                print self.floating_point_types
+                print(str(n.type.type.type.type.names))
+                print(self.floating_point_types)
                 if n.type.type.type.type.names[0] in self.floating_point_types:
                     self.tensors_list_float.append(str(n.name))
                     self.tensors_list_float_2d.append(str(n.name))
@@ -939,14 +938,14 @@ class CGenerator(object):
             else:
                 #more than 2 dimensions, currently not supported
                 pass
-            #print str(n.type.type.type.__class__)
-            #pprint (dir(n))
-            #print str(n);
-            #~ print self.tensors_list_float
-            #print str(n.name)
+            #print(str(n.type.type.type.__class__))
+            #pprint((dir(n)))
+            #print(str(n);)
+            #~ print(self.tensors_list_float)
+            #print(str(n.name))
         if isinstance(n.type, c_ast.Struct):
             return ""
-            
+
         #~ if isinstance(n.type, c_ast.PtrDecl):
             #~ if isinstance(n.type.type, c_ast.TypeDecl):
                 #~ self.var_type_dict [n.type.type.declname] = n.type.type.type.names
@@ -957,7 +956,7 @@ class CGenerator(object):
                     #~ self.var_type_dict [n.type.type.type.declname] = n.type.type.type.type.names
             #~ if isinstance(n.type, c_ast.TypeDecl) and hasattr(n.type.type, 'names'):
                 #~ self.var_type_dict [n.type.declname] = n.type.type.names
-     
+
         s = n.name if no_type else self._generate_decl(n)
         if n.bitsize: s += ' : ' + self.visit(n.bitsize)
         if n.init:
@@ -981,8 +980,8 @@ class CGenerator(object):
         return s
 
     def visit_Typedef(self, n):
-        temp_flag = self.interupted_flag 
-        #print 'typedef '
+        temp_flag = self.interupted_flag
+        #print('typedef ')
         try:
             #if ( n.type.type.type.names[0] == 'float' or n.type.type.type.names[0] == 'double'):
             if (n.type.type.type.names[0] in self.floating_point_types):
@@ -1030,7 +1029,7 @@ class CGenerator(object):
         return s
 
     def visit_FuncDef(self, n):
-        #print "visit funcdef"
+        #print("visit funcdef")
                 #Function parameters, do not proccess mpfr
         #p#print(n.decl.type.type.type.names) #function_type
         #p#print(n.decl.type.type.declname) #function_name
@@ -1040,14 +1039,14 @@ class CGenerator(object):
         except:
             pass
         #p#print(vars(n.decl.type.args.params[0].type.type.names)) #function_ arguments
-        #~ #print n.decl.type.args.params[0].type.type.names
-        #~ #print n.decl.type.args.params[0].type.declname
+        #~ #print(n.decl.type.args.params[0].type.type.names)
+        #~ #print(n.decl.type.args.params[0].type.declname)
         # p#print(vars(n.decl.type.args.params[0].type))
-        
+
         self.is_function_parameter = True
         decl = self.visit(n.decl)
-        print " func def "+decl
-        self.is_function_parameter = False  
+        print(" func def "+decl)
+        self.is_function_parameter = False
         self.indent_level = 0
         body = self.visit(n.body)
         pre_body = ""
@@ -1055,8 +1054,8 @@ class CGenerator(object):
             pre_body+='//output_stack != null from visiting function declare, dump all itermediate operations here\n'
             for item in self.output_stack:
                 pre_body+= item
-            self.output_stack =[]    
-                        
+            self.output_stack =[]
+
         if n.param_decls:
             knrdecls = ';\n'.join(self.visit(p) for p in n.param_decls)
             if self.current_function == 'main':
@@ -1128,7 +1127,7 @@ class CGenerator(object):
                 s+='//output_stack != null, dump all itermediate operations here\n'
                 for item in self.output_stack:
                     s+= item
-                self.output_stack =[]           
+                self.output_stack =[]
             s += 'return '
             if self.isMPFR(return_string):
                 if 'int' in return_type or 'long' in return_type:
@@ -1157,29 +1156,29 @@ class CGenerator(object):
 
     def visit_If(self, n):
         temp_interupted_flag = self.interupted_flag
-        
+
         s = ''
         prefix = ''
         return_string = ''
         #self.interupted_flag = True
         #if n.cond: s += self.visit(n.cond)
         if n.cond:
-            #print n.cond
-            #p#print (vars(n.cond.left))
-            ##print isinstance(n.cond,c_ast.BinaryOp)
+            #print(n.cond)
+            #p#print((vars(n.cond.left)))
+            ##print(isinstance(n.cond,c_ast.BinaryOp))
             if isinstance(n.cond,c_ast.BinaryOp):
                 if n.cond.op not in '<=>==' :
-                    #print 'check'
+                    #print('check')
                     self.interupted_flag = True
 
             return_string = self.visit(n.cond)
 
             if len(self.output_stack) !=0:
-                
+
                 #return_string = ""
                 for item in self.output_stack:
                     prefix += item
-                
+
                 self.output_stack = []
             #s+= return_string
             self.interupted_flag = False
@@ -1191,11 +1190,11 @@ class CGenerator(object):
         if n.iffalse:
             s += self._make_indent() + 'else\n'
             s += self._generate_stmt(n.iffalse, add_indent=True)
-       
+
         if isinstance(n.cond,c_ast.BinaryOp):
             if n.cond.op not in '<=>==' :
                 self.interupted_flag = False
-        self.interupted_flag = temp_interupted_flag 
+        self.interupted_flag = temp_interupted_flag
         return s
 
     def visit_For(self, n):
@@ -1210,9 +1209,9 @@ class CGenerator(object):
         self.interupted_flag = False;
         s += '){\n'
         #make sure correct behaviour of single statement for. Add backets
-		
-        self.interupted_flag = temp_flag 
-		
+
+        self.interupted_flag = temp_flag
+
         s += self._generate_stmt(n.stmt, add_indent=True)
         s += '\n'+ self._make_indent()+self._make_indent()+'}\n'
         return s
@@ -1242,7 +1241,7 @@ class CGenerator(object):
                 for item in self.output_stack:
                     return_string += item
                 s+= return_string
-                self.output_stack = []        
+                self.output_stack = []
         s += ');'
         return s
 
