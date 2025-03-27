@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """ Python simplified version of greedy search. Assume that the program outputs directly to stdout.
-This version uses Python multiprocessing for parallel search of programs to synthesize on FPGA
+This version is a blackbox sequential search for simple programs to synthesize on FPGA
 Written by Minh Ho (minhhn2910(at)gmail.com)
 (c) Copyright, All Rights Reserved. NO WARRANTY.
 """
@@ -14,22 +14,24 @@ import os
 import os.path
 import argparse
 import multiprocessing as mp
-from multiprocessing import Manager
-from functools import partial
-
+#from mpi4py import MPI
 LOWER_BOUND = 0
 UPPER_BOUND = 1
 AVERAGE = 2
 DEBUG = False
 
+# Add this global variable for multiprocessing
+NUM_PROCESSES = max(1, mp.cpu_count() - 1)  # Use all but one CPU
+
 SEED_NUMBER = 10   #use for random input generator of some program.
 
 # number of variables
+
 total_num_var = 0
 
 # basic info
-dependency_graph = {}
 
+dependency_graph = {}
 # stop condition for the last step
 stop_condition = True
 
@@ -43,13 +45,20 @@ current_error = 0.00
 
 error_reduced = []  # contains the reduced amount of errors when increasing each var
 
+# updated = []
+
 # for simplicity, define target here
+
 lower_precision_bound = 2
 
 minimum_cost = 1000000  # some abitrary big value for cost comparision
 
+
+# minimum_configurations = [] #result of minimum precisions configurations
+
 # Add this new global variable near the other globals
 ERROR_METRIC = "sqnr"  # Default metric is SQNR
+MAX_BITWIDTH = 53      # Default maximum bitwidth
 
 def refine_result(
     conf_file,
@@ -80,42 +89,28 @@ def refine_result(
 
 def parse_output(line):
     list_target = []
-    if isinstance(line, bytes):
-        line = line.decode('utf-8')
-        
-    line = line.replace(' ', '')
-    line = line.replace('\n', '')
+    line.replace(' ', '')
+    line.replace('\n', '')
 
-    # remove unexpected space
+        # remove unexpected space
+
     array = line.split(',')
+
+#       print array
 
     for target in array:
         try:
             if len(target) > 0 and target != '\n':
                 list_target.append(float(target))
         except:
-            # print "Failed to parse output string"
+
+                        # print "Failed to parse output string"
+
             continue
 
+#               print list_target
+
     return list_target
-
-
-# Worker function to process a single index
-def process_index(idx, conf_file, config_array, program, dependency_graph, results_dict):
-    increase_list = get_group_byIndex(idx, dependency_graph)
-    
-    # Make a copy of config_array to modify locally
-    local_config = list(config_array)
-    
-    for index in increase_list:
-        local_config[index] += 1
-
-    write_conf(conf_file, local_config)
-    error_result = run_program(program)
-
-    # Store result in shared dictionary
-    results_dict[idx] = error_result
-    return
 
 
 def update_error(
@@ -125,41 +120,35 @@ def update_error(
     program,
     dependency_graph,
     ):
+
+# TODO: update error vector based on the increase of precision of vars
+
     global error_reduced
-    global current_error
-    
-    # Create a manager to share data between processes
-    manager = Manager()
-    results_dict = manager.dict()
-    
-    # Determine the number of processes to use (use all available cores or limit based on vars)
-    num_processes = min(mp.cpu_count(), num_vars)
-    
-    # Create a pool of workers
-    pool = mp.Pool(processes=num_processes)
-    
-    # Process each index in parallel
-    process_func = partial(process_index, 
-                          conf_file=conf_file, 
-                          config_array=config_array, 
-                          program=program, 
-                          dependency_graph=dependency_graph, 
-                          results_dict=results_dict)
-    
-    pool.map(process_func, range(num_vars))
-    pool.close()
-    pool.join()
-    
-    # Update error_reduced with results from processes
-    for i in range(num_vars):
-        error_reduced[i] = results_dict.get(i, current_error)
-    
-    # Find the best index to update
     min_error_index = 0
     min_error = 1000000  # some abitrary big value for error comparision
+    min_error_j = 0
     min_error_cost = 1000000
 
-    for i in range(num_vars):
+    num_elements_sent = 0
+    recv_element = 0.00
+
+    for i in range(num_vars):  # mpi_here
+        #call worker here
+        working_index = i
+        increase_list = get_group_byIndex(working_index,
+                dependency_graph)
+
+        for index in increase_list:
+            config_array[index] += 1
+
+        write_conf(conf_file, config_array)
+        send_back_error = run_program(program)
+
+        for index in increase_list:
+            config_array[index] -= 1
+        error_reduced[working_index] = send_back_error
+
+    for i in range(num_vars):  # mpi_here
         index = i
         if error_reduced[index] < min_error:
             min_error_index = index
@@ -195,86 +184,35 @@ def update_error(
     return (config_array, min_error)
 
 
-# Worker function for isolated variable analysis
-def isolated_var_worker(idx, conf_file, program, result_queue):
-    precision_array = [24] * total_num_var
-    boundary = [2, 24, 13]
-    
-    write_conf(conf_file, precision_array)
-    while boundary[UPPER_BOUND] - boundary[LOWER_BOUND] != 1:
-        precision_array[idx] = boundary[AVERAGE]
-        write_conf(conf_file, precision_array)
-        if run_program(program) <= error_rate:
-            boundary[UPPER_BOUND] = boundary[AVERAGE]
-        else:
-            boundary[LOWER_BOUND] = boundary[AVERAGE]
-        boundary[AVERAGE] = (boundary[UPPER_BOUND] + boundary[LOWER_BOUND]) // 2
-    
-    if boundary[UPPER_BOUND] < lower_precision_bound:
-        boundary[UPPER_BOUND] = lower_precision_bound
-    
-    # Return the result for this index
-    result_queue.put((idx, boundary[UPPER_BOUND]))
-
-
 def isolated_var_analysis(conf_file, program):
-    global total_num_var
-    
     original_array = read_conf(conf_file)
-    total_num_var = len(original_array)
-    result_array = [24] * total_num_var
-    
-    # Create a manager to share data between processes
-    manager = Manager()
-    result_queue = manager.Queue()
-    
-    # Create and start worker processes
-    processes = []
-    num_processes = min(mp.cpu_count(), total_num_var)
-    
-    # Create a pool of workers
-    pool = mp.Pool(processes=num_processes)
-    
-    # Process each index in parallel
-    worker_func = partial(isolated_var_worker, 
-                         conf_file=conf_file, 
-                         program=program, 
-                         result_queue=result_queue)
-    
-    pool.map(worker_func, range(total_num_var))
-    pool.close()
-    pool.join()
-    
-    # Collect results
-    while not result_queue.empty():
-        idx, value = result_queue.get()
-        result_array[idx] = value
+    result_array = [MAX_BITWIDTH] * len(original_array)
+    num_elements_sent = 0
+    recv_element = 0
 
-    return result_array
-
-
-# Worker function for refine_1st
-def refine_1st_worker(idx, current_conf, min_conf, conf_file, program, result_queue):
-    precision_array = list(current_conf)
-    write_conf(conf_file, precision_array)
-    boundary = [min_conf[idx] - 1,
-                current_conf[idx],
-                (current_conf[idx] + min_conf[idx]) // 2]
-    
-    while boundary[UPPER_BOUND] - boundary[LOWER_BOUND] != 1:
-        precision_array[idx] = boundary[AVERAGE]
+    for i in range(len(original_array)):  # mpi_here
+        working_index = i
+        boundary = [2, MAX_BITWIDTH, (2 + MAX_BITWIDTH) // 2]
+        precision_array = [MAX_BITWIDTH] * len(original_array)
         write_conf(conf_file, precision_array)
-        if run_program(program) <= error_rate:
-            boundary[UPPER_BOUND] = boundary[AVERAGE]
-        else:
-            boundary[LOWER_BOUND] = boundary[AVERAGE]
-        boundary[AVERAGE] = (boundary[UPPER_BOUND] + boundary[LOWER_BOUND]) // 2
-    
-    if boundary[UPPER_BOUND] < lower_precision_bound:
-        boundary[UPPER_BOUND] = lower_precision_bound
-    
-    # Return the result for this index
-    result_queue.put((idx, boundary[UPPER_BOUND]))
+        while boundary[UPPER_BOUND] - boundary[LOWER_BOUND] != 1:
+            precision_array[working_index] = boundary[AVERAGE]
+            write_conf(conf_file, precision_array)
+            if run_program(program) <= error_rate:
+                boundary[UPPER_BOUND] = boundary[AVERAGE]
+            else:
+                boundary[LOWER_BOUND] = boundary[AVERAGE]
+            boundary[AVERAGE] = (boundary[UPPER_BOUND]
+                                 + boundary[LOWER_BOUND]) // 2
+        if boundary[UPPER_BOUND] < lower_precision_bound:
+            boundary[UPPER_BOUND] = lower_precision_bound
+        send_back_result = boundary[UPPER_BOUND]
+
+        result_array[working_index] = send_back_result
+    print("-"*80)
+    print("Isolated var analysis result: ", result_array)
+    print("-"*80)
+    return result_array
 
 
 def refine_1st(
@@ -283,51 +221,55 @@ def refine_1st(
     conf_file,
     program,
     ):
-    result_array = [24] * len(current_conf)
-    
-    # Create a manager to share data between processes
-    manager = Manager()
-    result_queue = manager.Queue()
-    
-    # Create and start worker processes
-    num_processes = min(mp.cpu_count(), len(current_conf))
-    
-    # Create a pool of workers
-    pool = mp.Pool(processes=num_processes)
-    
-    # Process each index in parallel
-    worker_func = partial(refine_1st_worker, 
-                         current_conf=current_conf,
-                         min_conf=min_conf,
-                         conf_file=conf_file, 
-                         program=program, 
-                         result_queue=result_queue)
-    
-    pool.map(worker_func, range(len(current_conf)))
-    pool.close()
-    pool.join()
-    
-    # Collect results
-    while not result_queue.empty():
-        idx, value = result_queue.get()
-        result_array[idx] = value
+    result_array = [MAX_BITWIDTH] * len(current_conf)
+    num_elements_sent = 0
+    recv_element = 0
 
+    for i in range(len(current_conf)):  # mpi_here
+        working_index = i
+        precision_array = list(current_conf)
+        write_conf(conf_file, precision_array)
+        boundary = [min_conf[working_index] - 1,
+                    current_conf[working_index],
+                    (current_conf[working_index]
+                    + min_conf[working_index]) // 2]
+        while boundary[UPPER_BOUND] - boundary[LOWER_BOUND] != 1:
+            precision_array[working_index] = boundary[AVERAGE]
+            write_conf(conf_file, precision_array)
+            if run_program(program) <= error_rate:
+                boundary[UPPER_BOUND] = boundary[AVERAGE]
+            else:
+                boundary[LOWER_BOUND] = boundary[AVERAGE]
+            boundary[AVERAGE] = (boundary[UPPER_BOUND]
+                                 + boundary[LOWER_BOUND]) // 2
+        if boundary[UPPER_BOUND] < lower_precision_bound:
+            boundary[UPPER_BOUND] = lower_precision_bound
+        send_back_result = boundary[UPPER_BOUND]
+
+
+
+        result_array[working_index] = send_back_result
+
+    print("-"*80)
+    print("Refine 1st result: ", result_array)
+    print("-"*80)
     return result_array
 
-
 def greedy_search(conf_file, program, target_file):
+
     global target_result
     global current_error
     global error_reduced  # for debugging purpose
     global total_num_var
-
-    # Create temp directories for each process to have its own copy
-    base_dir = os.path.dirname(conf_file)
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
-
     target_result = read_target(target_file)
-
+    print("-"*80)
+    print("Program: ", program)
+    print("Target result: ", target_result)
+    print("Error rate: ", error_rate)
+    print("Error metric: ", ERROR_METRIC)
+    print("Max bitwidth: ", MAX_BITWIDTH)
+    print("Number of processes: ", NUM_PROCESSES)
+    print("-"*80)
     if DEBUG:
         print(target_result)
     if os.path.exists('log.txt'):
@@ -336,12 +278,18 @@ def greedy_search(conf_file, program, target_file):
         print('isolated_var_analysis ---------')
 
     min_conf = isolated_var_analysis(conf_file, program)
-
+    
     error_reduced = [0.00] * len(min_conf)
-    result_precision = [24] * len(min_conf)
+    result_precision = [MAX_BITWIDTH] * len(min_conf)
     current_conf = list(min_conf)
     total_num_var = len(min_conf)
-
+        # Check if all items in min_conf are MAX_BITWIDTH
+    if all(precision == MAX_BITWIDTH for precision in min_conf):
+        print("-"*80)
+        print("All variables require maximum precision. No optimization possible.")
+        print("Exiting program.")
+        print("-"*80)
+        sys.exit(0)
     if DEBUG:
         print('min_conf found ------------')
         print(min_conf)
@@ -363,6 +311,8 @@ def greedy_search(conf_file, program, target_file):
     previous_satisfied_conf = []  # keep track of the last conf_ to validate the stop condition
     while not stop_condition:
 
+###################################
+
         min_conf = refine_1st(current_conf, min_conf, conf_file,
                 program)
         if DEBUG:
@@ -370,12 +320,16 @@ def greedy_search(conf_file, program, target_file):
             print('refine 1pass ' + str(min_conf))
 
         error_reduced = [0.00] * len(min_conf)
-        result_precision = [24] * len(min_conf)
+        result_precision = [MAX_BITWIDTH] * len(min_conf)
         current_conf = list(min_conf)
         total_num_var = len(min_conf)
+        #min_conf = mpi_comm.bcast(min_conf, root=0)
 
         write_conf(conf_file, min_conf)
         current_error = run_program(program)
+
+#                if current_error<= error_rate:
+#                        break
 
         while current_error > error_rate:
             (current_conf, current_error) = \
@@ -383,7 +337,13 @@ def greedy_search(conf_file, program, target_file):
                                     current_conf, program,
                                     dependency_graph)
 
+                # update_cost(precision_array)
+
             write_log(current_conf, -1, [str(current_error)])
+            #mpi_comm.Barrier()
+
+                # barrier here
+                # barrier here
 
         if sum(current_conf) == sum(previous_satisfied_conf):  # stop condition.
             stop_condition = True
@@ -392,19 +352,32 @@ def greedy_search(conf_file, program, target_file):
 
         previous_satisfied_conf = list(current_conf)  # update the last conf
 
+        #stop_condition = mpi_comm.bcast(stop_condition, root=0)
         if DEBUG:
             print('refine 2v pass ' + str(current_conf))
 
+        # ############################################333
+
+        if DEBUG:
+            print('end of searching ')
+
+  #      print "trying to refine result "
+# ....current_conf = refine_result (conf_file, len(min_conf),current_conf,program)
     print(str(current_conf))
     write_log(current_conf, -2, ['------Final result-------'])
 
 
 def run_program(program):
+
+# ....output = subprocess.Popen(['sh', 'run_lbm_mpfr.sh'], stdout=subprocess.PIPE).communicate()[0]
+
     output = subprocess.Popen([program, '%s'%(SEED_NUMBER)],
                               stdout=subprocess.PIPE).communicate()[0]
     
     # Convert bytes to string in Python 3
     output = output.decode('utf-8')
+
+    # return float(output)
 
     floating_result = parse_output(output)
 
@@ -455,11 +428,13 @@ def write_log(precision_array, loop, permutation):
 
 
 def read_conf(conf_file_name):
+
     # format a1,a2,a3,...
+
     list_argument = []
     with open(conf_file_name) as conf_file:
         for line in conf_file:
-            line = line.replace(' ', '')
+            line.replace(' ', '')
             array = line.split(',')
             for argument in array:
                 try:
@@ -471,13 +446,16 @@ def read_conf(conf_file_name):
 
 
 def read_target(target_file):
+
     # format a1,a2,a3...
+
     list_target = []
     with open(target_file) as conf_file:
         for line in conf_file:
-            line = line.replace(' ', '')
+            line.replace(' ', '')
 
             # remove unexpected space
+
             array = line.split(',')
             for target in array:
                 try:
@@ -487,6 +465,8 @@ def read_target(target_file):
                     print('Failed to parse target file')
     return list_target
 
+
+# done
 
 def get_group_byIndex(current_index, dependency_graph):
     result = []
@@ -498,53 +478,6 @@ def get_group_byIndex(current_index, dependency_graph):
             for item in dependency_graph.get(str(current_index)):
                 result.append(int(item))
     return result
-
-
-def build_dependency_path(graph_file):
-    graph_nodes = []
-    reverse_graph_dict = {}
-    
-    if os.path.exists(graph_file):
-        with open(graph_file) as data_lines:
-            for line in data_lines:
-                vars_array = line.replace('\n', '').split(' ')
-                if len(vars_array) > 1:
-                    dest_node = vars_array[0]
-                    for item in vars_array[1:]:
-                        if item in reverse_graph_dict:
-                            current_list = reverse_graph_dict.get(item)
-                            if dest_node not in current_list:
-                                current_list.append(dest_node)
-                        else:
-                            current_list = []
-                            current_list.append(dest_node)
-                            reverse_graph_dict[item] = current_list
-        
-        for key in reverse_graph_dict.keys():
-            node_list = reverse_graph_dict.get(key)
-            new_node_list = list(node_list)
-            stop_condition = False
-            temp_node_list = list(node_list)
-            traversing_node_list = temp_node_list
-            while not stop_condition:
-                # broad first traverse. the final result(s) is/are the node that doesnt appear on keys list
-                temp_node_list = list(traversing_node_list)
-                traversing_node_list = []
-                for node in temp_node_list:
-                    stop_condition = True
-                    if node in reverse_graph_dict:
-                        for item in reverse_graph_dict.get(node):
-                            if item not in new_node_list:
-                                stop_condition = False
-                                new_node_list.append(item)
-                                traversing_node_list.append(item)
-
-            # remove key in new_node_list if it has
-            if key in new_node_list:
-                new_node_list.remove(key)
-            reverse_graph_dict[key] = new_node_list
-            
-    return reverse_graph_dict
 
 
 def write_conf(conf_file, original_array):
@@ -559,7 +492,8 @@ def main(argv):
     global SEED_NUMBER
     global ERROR_METRIC
     global error_rate
-    global dependency_graph
+    global MAX_BITWIDTH
+    global NUM_PROCESSES
     
     parser = argparse.ArgumentParser(description="Simplified version of greedy search for synthesizing FPGA programs")
     
@@ -574,6 +508,10 @@ def main(argv):
                        help="Error metric to use (overrides positional argument)")
     parser.add_argument("--error", type=float, 
                        help="Error rate threshold (e.g., 2.5e-10)")
+    parser.add_argument("--max-bitwidth", type=int, default=53,
+                       help="Maximum bitwidth to consider in the search (default: 53)")
+    parser.add_argument("--processes", type=int, default=NUM_PROCESSES,
+                       help=f"Number of processes to use (default: {NUM_PROCESSES})")
     
     args = parser.parse_args(argv)
     
@@ -583,6 +521,12 @@ def main(argv):
     config_file = 'config_file.txt'
     binary_file = args.program
     target_file = 'target.txt'
+    
+    # Set max bitwidth from command line
+    MAX_BITWIDTH = args.max_bitwidth
+    
+    # Set number of processes
+    NUM_PROCESSES = args.processes
     
     # Check if the bash script exists, if not create it
     if not os.path.exists(program):
@@ -607,18 +551,8 @@ def main(argv):
     # Error rate: if specified by user
     if args.error is not None:
         error_rate = args.error
-        
-    # Build dependency graph if exists
-    dependency_graph = build_dependency_path('dependency_graph.txt')
     
-    if __name__ == '__main__':
-        # Set start method for multiprocessing (important for compatibility)
-        try:
-            mp.set_start_method('spawn')
-        except RuntimeError:
-            pass  # Already set
-            
     greedy_search(config_file, program, target_file)
 
 if __name__ == '__main__':
-    main(sys.argv[1:]) 
+    main(sys.argv[1:])
