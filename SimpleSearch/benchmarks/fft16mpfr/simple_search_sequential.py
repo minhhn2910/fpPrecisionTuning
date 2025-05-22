@@ -12,6 +12,7 @@ import subprocess
 import shutil
 import os
 import os.path
+import argparse
 #from mpi4py import MPI
 LOWER_BOUND = 0
 UPPER_BOUND = 1
@@ -51,6 +52,10 @@ minimum_cost = 1000000  # some abitrary big value for cost comparision
 
 
 # minimum_configurations = [] #result of minimum precisions configurations
+
+# Add this new global variable near the other globals
+ERROR_METRIC = "avg_abs"  # Default metric is average absolute error
+MAX_BITWIDTH = 53      # Default maximum bitwidth
 
 def refine_result(
     conf_file,
@@ -178,14 +183,14 @@ def update_error(
 
 def isolated_var_analysis(conf_file, program):
     original_array = read_conf(conf_file)
-    result_array = [24] * len(original_array)
+    result_array = [MAX_BITWIDTH] * len(original_array)
     num_elements_sent = 0
     recv_element = 0
 
     for i in range(len(original_array)):  # mpi_here
         working_index = i
-        boundary = [2, 24, 13]
-        precision_array = [24] * len(original_array)
+        boundary = [2, MAX_BITWIDTH, (2 + MAX_BITWIDTH) // 2]
+        precision_array = [MAX_BITWIDTH] * len(original_array)
         write_conf(conf_file, precision_array)
         while boundary[UPPER_BOUND] - boundary[LOWER_BOUND] != 1:
             precision_array[working_index] = boundary[AVERAGE]
@@ -201,7 +206,9 @@ def isolated_var_analysis(conf_file, program):
         send_back_result = boundary[UPPER_BOUND]
 
         result_array[working_index] = send_back_result
-
+    print("-"*80)
+    print("Isolated var analysis result: ", result_array)
+    print("-"*80)
     return result_array
 
 
@@ -211,7 +218,7 @@ def refine_1st(
     conf_file,
     program,
     ):
-    result_array = [24] * len(current_conf)
+    result_array = [MAX_BITWIDTH] * len(current_conf)
     num_elements_sent = 0
     recv_element = 0
 
@@ -240,6 +247,9 @@ def refine_1st(
 
         result_array[working_index] = send_back_result
 
+    print("-"*80)
+    print("Refine 1st result: ", result_array)
+    print("-"*80)
     return result_array
 
 def greedy_search(conf_file, program, target_file):
@@ -248,9 +258,14 @@ def greedy_search(conf_file, program, target_file):
     global current_error
     global error_reduced  # for debugging purpose
     global total_num_var
-
     target_result = read_target(target_file)
-
+    print("-"*80)
+    print("Program: ", program)
+    print("Target result: ", target_result)
+    print("Error rate: ", error_rate)
+    print("Error metric: ", ERROR_METRIC)
+    print("Max bitwidth: ", MAX_BITWIDTH)
+    print("-"*80)
     if DEBUG:
         print(target_result)
     if os.path.exists('log.txt'):
@@ -259,12 +274,18 @@ def greedy_search(conf_file, program, target_file):
         print('isolated_var_analysis ---------')
 
     min_conf = isolated_var_analysis(conf_file, program)
-
+    
     error_reduced = [0.00] * len(min_conf)
-    result_precision = [24] * len(min_conf)
+    result_precision = [MAX_BITWIDTH] * len(min_conf)
     current_conf = list(min_conf)
     total_num_var = len(min_conf)
-
+        # Check if all items in min_conf are MAX_BITWIDTH
+    if all(precision == MAX_BITWIDTH for precision in min_conf):
+        print("-"*80)
+        print("All variables require maximum precision. No optimization possible.")
+        print("Exiting program.")
+        print("-"*80)
+        sys.exit(0)
     if DEBUG:
         print('min_conf found ------------')
         print(min_conf)
@@ -295,7 +316,7 @@ def greedy_search(conf_file, program, target_file):
             print('refine 1pass ' + str(min_conf))
 
         error_reduced = [0.00] * len(min_conf)
-        result_precision = [24] * len(min_conf)
+        result_precision = [MAX_BITWIDTH] * len(min_conf)
         current_conf = list(min_conf)
         total_num_var = len(min_conf)
         #min_conf = mpi_comm.bcast(min_conf, root=0)
@@ -365,19 +386,32 @@ def check_output(floating_result, target_result):
             % (len(floating_result), len(target_result)))
         print(floating_result)
         return 0.00
-    signal_sqr = 0.00
-    error_sqr = 0.00
-    for i in range(len(floating_result)):
-        signal_sqr += target_result[i] ** 2
-        error_sqr += (floating_result[i] - target_result[i]) ** 2
+    
+    # Use the global metric setting
+    global ERROR_METRIC
+    
+    if ERROR_METRIC.lower() == "avg_abs":
+        # Calculate average absolute error
+        abs_error_sum = 0.00
+        for i in range(len(floating_result)):
+            abs_error_sum += abs(floating_result[i] - target_result[i])
+        
+        return abs_error_sum / len(floating_result)
+    else:  # Default: "sqnr"
+        # Original SQNR calculation
+        signal_sqr = 0.00
+        error_sqr = 0.00
+        for i in range(len(floating_result)):
+            signal_sqr += target_result[i] ** 2
+            error_sqr += (floating_result[i] - target_result[i]) ** 2
 
-    sqnr = 0.00
-    if error_sqr != 0.00:
-        sqnr = signal_sqr / error_sqr
-    if sqnr != 0:
-        return 1.0 / sqnr
-    else:
-        return 0.00
+        sqnr = 0.00
+        if error_sqr != 0.00:
+            sqnr = signal_sqr / error_sqr
+        if sqnr != 0:
+            return 1.0 / sqnr
+        else:
+            return 0.00
 
 
 def write_log(precision_array, loop, permutation):
@@ -452,25 +486,80 @@ def write_conf(conf_file, original_array):
 
 def main(argv):
     global SEED_NUMBER
-
-    if (len(argv) != 2):
-        print("\n ---------------------------------------------")
-        print("Usage: ./search.py seed_number program")
-        print("  config_file.txt contains the precision configuration of the mpfr program. This file is generated by c2mpfr.py tool")
-        print("  target.txt contains the exact result of the original program to compare this file is generated by the statistic_guided_search.py automatically")
-        print("  if you are not using the tool statistic_guided_search.py. You can just type ./original_program > target.txt to generate the target file")
-        print("  program must have the [program_name] mpfr version and [program_name].sh version")
-        print("  The .sh version will be used in different mpi processes")
-        print("  the content of [program_name].sh is to move to the current directory of each mpi process and execute the program")
-        print("  We need to do this because we have to run multiple instances of the program on different config.txt in different folder")
-        print("  Please see the sample .sh file for guidance, you only need to modify the ./program_name in the last line of .sh file ")
-        print("---------------------------------------------\n")
-        exit()
-    program = './' + argv[1] + '.sh'
-    config_file = 'config_file.txt'
-    SEED_NUMBER = int(argv[0])
-    binary_file = argv[1]
-    target_file = 'target.txt'
+    global ERROR_METRIC
+    global error_rate
+    global MAX_BITWIDTH
+    
+    parser = argparse.ArgumentParser(description="Simplified version of greedy search for synthesizing FPGA programs")
+    
+    # Maintain backward compatibility with positional arguments
+    parser.add_argument("seed_number", type=int, help="Seed number for random input generator")
+    parser.add_argument("program", help="Program name (with or without path, without .sh extension)")
+    parser.add_argument("error_metric", nargs='?', default="sqnr", 
+                       help="Error metric to use (sqnr or avg_abs)")
+    
+    # Add new optional arguments
+    parser.add_argument("--metric", choices=["sqnr", "avg_abs"], 
+                       help="Error metric to use (overrides positional argument)")
+    parser.add_argument("--error", type=float, 
+                       help="Error rate threshold (e.g., 2.5e-10)")
+    parser.add_argument("--max-bitwidth", type=int, default=53,
+                       help="Maximum bitwidth to consider in the search (default: 53)")
+    
+    args = parser.parse_args(argv)
+    
+    # Set global variables based on arguments
+    SEED_NUMBER = args.seed_number
+    
+    # Handle paths in the program argument
+    program_path = os.path.dirname(args.program)
+    program_base = os.path.basename(args.program)
+    
+    if program_path:
+        # If program has a path component, use that directory for all files
+        config_file = os.path.join(program_path, 'config_file.txt')
+        target_file = os.path.join(program_path, 'target.txt')
+        binary_file = program_base
+        program = os.path.join(program_path, program_base + '.sh')
+    else:
+        # Original behavior for when no path is provided
+        config_file = 'config_file.txt'
+        target_file = 'target.txt'
+        binary_file = args.program
+        program = './' + args.program + '.sh'
+    
+    # Set max bitwidth from command line
+    MAX_BITWIDTH = args.max_bitwidth
+    
+    # Check if the bash script exists, if not create it
+    if not os.path.exists(program):
+        # Ensure directory exists for program
+        program_dir = os.path.dirname(program)
+        if program_dir and not os.path.exists(program_dir):
+            os.makedirs(program_dir, exist_ok=True)
+            
+        print(f"Creating bash script {program} for {binary_file}")
+        with open(program, 'w') as bash_file:
+            bash_file.write('#!/bin/bash\n')
+            bash_file.write('DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )\n')
+            bash_file.write('cd $DIR\n')
+            bash_file.write(f'./{binary_file} $1\n')
+        
+        # Make the bash script executable
+        os.chmod(program, 0o755)
+    
+    # Error metric: command-line option takes precedence
+    if args.metric:
+        ERROR_METRIC = args.metric
+    elif args.error_metric.lower() in ["sqnr", "avg_abs"]:
+        ERROR_METRIC = args.error_metric.lower()
+    else:
+        print(f"Warning: Unknown error metric '{args.error_metric}'. Using default (sqnr).")
+    
+    # Error rate: if specified by user
+    if args.error is not None:
+        error_rate = args.error
+    
     greedy_search(config_file, program, target_file)
 
 if __name__ == '__main__':

@@ -54,7 +54,7 @@ minimum_cost = 1000000  # some abitrary big value for cost comparision
 # minimum_configurations = [] #result of minimum precisions configurations
 
 # Add this new global variable near the other globals
-ERROR_METRIC = "sqnr"  # Default metric is SQNR
+ERROR_METRIC = "avg_abs"  # Default metric is average absolute error
 MAX_BITWIDTH = 53      # Default maximum bitwidth
 
 def refine_result(
@@ -494,7 +494,7 @@ def main(argv):
     
     # Maintain backward compatibility with positional arguments
     parser.add_argument("seed_number", type=int, help="Seed number for random input generator")
-    parser.add_argument("program", help="Program name (without .sh extension)")
+    parser.add_argument("program", help="Program name (with or without path, without .sh extension)")
     parser.add_argument("error_metric", nargs='?', default="sqnr", 
                        help="Error metric to use (sqnr or avg_abs)")
     
@@ -510,16 +510,34 @@ def main(argv):
     
     # Set global variables based on arguments
     SEED_NUMBER = args.seed_number
-    program = './' + args.program + '.sh'
-    config_file = 'config_file.txt'
-    binary_file = args.program
-    target_file = 'target.txt'
+    
+    # Handle paths in the program argument
+    program_path = os.path.dirname(args.program)
+    program_base = os.path.basename(args.program)
+    
+    if program_path:
+        # If program has a path component, use that directory for all files
+        config_file = os.path.join(program_path, 'config_file.txt')
+        target_file = os.path.join(program_path, 'target.txt')
+        binary_file = program_base
+        program = os.path.join(program_path, program_base + '.sh')
+    else:
+        # Original behavior for when no path is provided
+        config_file = 'config_file.txt'
+        target_file = 'target.txt'
+        binary_file = args.program
+        program = './' + args.program + '.sh'
     
     # Set max bitwidth from command line
     MAX_BITWIDTH = args.max_bitwidth
     
     # Check if the bash script exists, if not create it
     if not os.path.exists(program):
+        # Ensure directory exists for program
+        program_dir = os.path.dirname(program)
+        if program_dir and not os.path.exists(program_dir):
+            os.makedirs(program_dir, exist_ok=True)
+            
         print(f"Creating bash script {program} for {binary_file}")
         with open(program, 'w') as bash_file:
             bash_file.write('#!/bin/bash\n')
