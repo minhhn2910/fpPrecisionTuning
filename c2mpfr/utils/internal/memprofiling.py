@@ -76,16 +76,25 @@ class NodeVisitor(object):
 
 
 def heapyprofile():
-    # pip install guppy
-    # [works on python 2.7, AFAIK]
-    from guppy import hpy
-    import gc
+    try:
+        # pip install guppy3 (for Python 3)
+        # or pip install guppy (for Python 2.7)
+        try:
+            # Try Python 3 version
+            from guppy3 import hpy
+        except ImportError:
+            # Fall back to Python 2.7 version
+            from guppy import hpy
 
-    hp = hpy()
-    ast = parse_file('/tmp/197.c')
-    gc.collect()
-    h = hp.heap()
-    print(h)
+        import gc
+
+        hp = hpy()
+        ast = parse_file('/tmp/197.c')
+        gc.collect()
+        h = hp.heap()
+        print(h)
+    except ImportError:
+        print("Guppy/Guppy3 not available - skipping heap profile")
 
 
 def memprofile():

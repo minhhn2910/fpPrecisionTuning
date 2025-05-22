@@ -29,8 +29,8 @@
 #define UCHAR_MAX 255
 #define USHRT_MAX 65535
 #define UINT_MAX 4294967295U
-#define RAND_MAX 32767
-#define INT_MAX 32767
+#define RAND_MAX 2147483647
+#define INT_MAX 2147483647
 
 /* C99 stdbool.h defines */
 #define __bool_true_false_are_defined 1

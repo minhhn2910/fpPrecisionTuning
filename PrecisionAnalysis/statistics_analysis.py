@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Python code for statistics analysis of error of a given program on different random inputs.
 usage ./statistics_analysis.py float_ver mpfr_ver range
 	float_ver : original version of the program which will be used as a reference.
@@ -15,35 +15,39 @@ import sys
 import time
 import subprocess
 from math import log10
-from mpi4py import MPI
+import multiprocessing
 import numpy as np
+import argparse
 #some basic configurations, doesn't affect the search result
 WRITE_LOG = False
 DEBUG = False
 TICK_CLOCK = 20000 #output to stdout after 20000 inputs
 #end of basic configurations
 PERCENTILE_VALUE = 5 #default, check whether 95% of SQNR is above a certain threshold
+ERROR_METRIC = "avg_abs"  # Default error metric
+NUM_PROCESSES = multiprocessing.cpu_count()  # Default to use all available CPUs
 
 
 #basic info
-mpi_comm = MPI.COMM_WORLD
-mpi_rank = MPI.COMM_WORLD.Get_rank()
-mpi_size = MPI.COMM_WORLD.Get_size()
-mpi_name = MPI.Get_processor_name()
+# mpi_comm = MPI.COMM_WORLD # Removed MPI global
+# mpi_rank = MPI.COMM_WORLD.Get_rank() # Removed MPI global
+# mpi_size = MPI.COMM_WORLD.Get_size() # Removed MPI global
+# mpi_name = MPI.Get_processor_name() # Removed MPI global
 
 def parse_output(line):
         list_target = []
-        line.replace(" ", "")
-        line.replace('\n','')
+        line = line.decode('utf-8')  # Decode bytes to string
+        line = line.replace(" ", "")
+        line = line.replace('\n','')
         #remove unexpected space
         array = line.split(',')
-#       print array
+#       print(array)
         for target in array:
                 try:
                         if(len(target)>0 and target!='\n'):
                                 list_target.append(float(target))
                 except:
-                        #print "Failed to parse output string"
+                        #print("Failed to parse output string")
                         continue
         return  list_target
         
@@ -57,108 +61,220 @@ def run_program(double_program,float_program, seed):
 	return check_output(floating_result,target_result)
 
 def check_output(floating_result,target_result):
-#TODO: modify this func to return checksum error. instead of true and false. feed the checsum error to greedy decision func
-	if len(floating_result)== 0:
-			print 'error: len(result) = 0'
-	if len(floating_result) != len(target_result):
-		print 'Error : float result has length: %s while double_result has length: %s' %(len(floating_result),len(target_result))
-		print floating_result
-		return 0.0
-	signal_sqr = 0.0
-	error_sqr = 0.0	
-	for i in range(len(floating_result)):
-		signal_sqr += target_result[i]**2
-		error_sqr  += (floating_result[i]-target_result[i])**2
-		#~ print error_sqr
-	sqnr = 0.0
-	if error_sqr !=0.0:
-		sqnr = signal_sqr/error_sqr
-	if sqnr != 0:
-		return 1.0/sqnr
-	else:
-		return 0.0
-def main (double_ver, float_ver, search_range):
-	mpi_comm.Barrier() 
-	if mpi_rank == 0: #master
-		cal_sqnr_master(double_ver, float_ver, int(search_range))
-	else:
-		cal_sqnr_worker(double_ver, float_ver)
-def cal_sqnr_master (double_ver, float_ver, search_range):
-	SEED_RANGE  = search_range;
-	sum_sqnr = 0.0
-	max_sqnr = 0.0
-	max_seed = 0
-	min_sqnr = 100.0
-	min_seed = 0
-	num_elements_sent = 0
-	recv_element = 0.0
-	sqnr_vector = []
-	for i in range(mpi_size-1):
-		#~ print "send from %d  to %d data %d"%(0,i+1,i)
-		if num_elements_sent < SEED_RANGE:
-			mpi_comm.send(i, dest=i+1, tag=1)
-			num_elements_sent += 1
-		else:
-			mpi_comm.send(0, dest=i+1, tag=0) #signal finish proc.
-	for i in range(SEED_RANGE):	#mpi_here
-		
-		status = MPI.Status()
-		recv_element = mpi_comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status) 		
-		index = status.Get_tag()
-		dest_proc = status.Get_source()
-		
-		current_sqnr = recv_element
-		sqnr_vector.append(current_sqnr)
-		if (i % TICK_CLOCK == 0) and DEBUG:
-			print "Tick %d %f"%(i,sum_sqnr/(i+1))
-		#the below comparisions is not necessary on small SEED_RANGE, but will be efficient on big SEED_RANGE
-		if current_sqnr > max_sqnr : 
-			max_sqnr = current_sqnr
-			max_seed = index
-		if current_sqnr < min_sqnr : 
-			min_sqnr = current_sqnr
-			min_seed = index
-		sum_sqnr += current_sqnr		
-		if num_elements_sent < SEED_RANGE: #send more to available proc
-			mpi_comm.send(num_elements_sent, dest=dest_proc, tag=1)
-			#~ print "send from %d  to %d data %d"%(0,dest_proc,num_elements_sent)
-			num_elements_sent += 1
-		else:
-			mpi_comm.send(0, dest=dest_proc, tag=0) #signal finish proc.	
-	
-	SQNR_pecentile = np.percentile(sqnr_vector, PERCENTILE_VALUE)		
-	print "[%d,%f,%d,%f,%f,%f]"%(min_seed,min_sqnr,max_seed,max_sqnr,sum_sqnr/SEED_RANGE,SQNR_pecentile)
-	if (DEBUG):
-		print " \n max: " + str(max_sqnr) + "  max_seed " + str(max_seed) 
-		print " \n min: " + str(min_sqnr) + "  min_seed " + str(min_seed)
-		print "\n average: "+ str(sum_sqnr/SEED_RANGE) 		
-	if(WRITE_LOG):
-		write_log(sqnr_vector)
+    if len(floating_result) != len(target_result):
+        print('Error : float result has length: %s while target_result has length: %s' %(len(floating_result),len(target_result)))
+        print(f"Floating result: {floating_result}")
+        print(f"Target result: {target_result}")
+        return float('inf') # Return maximal error for mismatch
+    
+    # If both lists are empty (e.g. program produced no parseable output, consistently)
+    if not floating_result: # This implies target_result is also empty due to the check above
+        return 0.0 # No data to compare, or perfect match on empty data; 0 error.
+    
+    if ERROR_METRIC.lower() == "avg_abs":
+        # Calculate average absolute error
+        abs_error_sum = 0.0
+        for i in range(len(floating_result)):
+            abs_error_sum += abs(floating_result[i] - target_result[i])
+        # len(floating_result) will be > 0 here due to the check above
+        return abs_error_sum / len(floating_result)
+    else:  # Default: "sqnr" - calculate 1/SQNR as error metric
+        signal_sqr = 0.0
+        error_sqr = 0.0	
+        for i in range(len(floating_result)):
+            signal_sqr += target_result[i]**2
+            error_sqr  += (floating_result[i]-target_result[i])**2
+        
+        if error_sqr == 0.0:
+            return 0.0  # Perfect match: SQNR is infinite, so 1/SQNR (error) is 0 (best error)
+        
+        # error_sqr is non-zero here
+        if signal_sqr == 0.0:
+            # Error exists, but signal is zero. SQNR is 0. 1/SQNR (error) is infinite (worst error).
+            return float('inf') 
 
+        # Both error_sqr and signal_sqr are non-zero (signal_sqr must be >0 if not 0)
+        return error_sqr / signal_sqr # This is 1/SQNR (error value)
+
+# New worker function for multiprocessing
+def process_seed_worker(args):
+	double_ver, float_ver, seed = args
+	# run_program now returns the direct error metric (1/SQNR or avg_abs_error)
+	# where higher value means worse error.
+	error_value = run_program(double_ver, float_ver, seed)
+	return error_value, seed
+
+def _convert_error_to_sqnr_display(error_value):
+	"""Converts an error metric (like 1/SQNR) to SQNR for display."""
+	if error_value == 0.0: # Perfect match (infinite SQNR)
+		return 1e9 # Arbitrary large value for display
+	if error_value == float('inf'): # Zero SQNR or undefined
+		return 0.0
+	if error_value < 0: # Should not happen with current metrics
+	    return -1e9 # Or handle as an error
+	return 1.0 / error_value
+
+def main (double_ver, float_ver, search_range_str):
+	global ERROR_METRIC, NUM_PROCESSES
+	search_range = int(search_range_str)
 	
-def cal_sqnr_worker (double_ver, float_ver):
-	working_index = 0
-	status = MPI.Status()
-	working_index = mpi_comm.recv(source=0, tag=MPI.ANY_TAG, status=status) 
-	while(status.Get_tag() > 0):	
-		current_sqnr = 10*abs(log10(run_program(double_ver,float_ver,working_index)))
-		mpi_comm.send(current_sqnr, dest=0, tag=working_index)		
-		working_index = mpi_comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+	# Use the configured number of worker processes
+	num_workers = NUM_PROCESSES
+
+	# Variables for aggregating results.
+	# These will now store direct error metrics, where higher is worse.
+	sum_error_metric = 0.0
+	max_error_metric = 0.0  # Worst error found (max value of the error metric)
+	max_seed = 0
+	min_error_metric = float('inf') # Best error found (min value of the error metric)
+	min_seed = 0
+	error_metric_vector = [] # Stores all error metric values
+
+	# Prepare arguments for worker processes
+	tasks = [(double_ver, float_ver, i) for i in range(search_range)]
+
+	processed_count = 0
+
+	if search_range > 0:
+		# Use a Pool of worker processes
+		with multiprocessing.Pool(processes=num_workers) as pool:
+			# imap_unordered processes tasks in parallel and returns results as they complete
+			results_iterator = pool.imap_unordered(process_seed_worker, tasks)
+			if DEBUG:
+				print(f"Starting processing with {num_workers} workers for {search_range} seeds.")
+				print(f"Using error metric: {ERROR_METRIC.upper()}")
+			
+			for current_error_value, original_seed in results_iterator:
+				error_metric_vector.append(current_error_value)
+				
+				# Update statistics for worst error
+				if current_error_value > max_error_metric:
+					max_error_metric = current_error_value
+					max_seed = original_seed
+				
+				# Update statistics for best error
+				if current_error_value < min_error_metric:
+					min_error_metric = current_error_value
+					min_seed = original_seed
+				
+				sum_error_metric += current_error_value
+				processed_count += 1
+
+				# if (processed_count % TICK_CLOCK == 0) and DEBUG:
+				# 	if processed_count > 0:
+				# 		avg_so_far = sum_error_metric / processed_count
+				# 		print(f"Tick {processed_count} (seed {original_seed}) Avg Error Metric: {avg_so_far}")
+				# 	else:
+				# 		print(f"Tick {processed_count} (seed {original_seed})")
 	
+	# Prepare variables for final output, using original names for compatibility with print format
+	# These now reflect the direct error metrics.
+	min_sqnr_transformed = min_error_metric
+	max_sqnr_transformed = max_error_metric
+	avg_transformed_sqnr = 0.0
+	SQNR_pecentile_transformed = 0.0 # Default for percentile
+
+	if search_range > 0 and processed_count > 0:
+		avg_transformed_sqnr = sum_error_metric / processed_count
+		if error_metric_vector: # Ensure error_metric_vector is not empty
+			# Calculate the (100-PERCENTILE_VALUE)th percentile for the worst errors
+			# e.g., if PERCENTILE_VALUE is 5, this is the 95th percentile of the error metric.
+			percentile_to_calc = 100 - PERCENTILE_VALUE
+			SQNR_pecentile_transformed = np.percentile(error_metric_vector, percentile_to_calc)
+		# If error_metric_vector is empty but processed_count > 0 (should not happen), SQNR_pecentile_transformed remains 0.0
+	else: # search_range is 0 or processed_count is 0
+		# avg_transformed_sqnr is already 0.0
+		# SQNR_pecentile_transformed is already 0.0
+		if search_range == 0: # Explicitly set defaults for min/max if no runs attempted
+			min_seed = 0
+			min_sqnr_transformed = float('inf') # Best possible error is undefined (inf error metric)
+			max_seed = 0
+			max_sqnr_transformed = 0.0         # Worst possible error (0 error metric, if all are 0)
+
+	# Prepare values for final printing
+	# val_for_min_seed: value associated with the seed that gave the minimum error metric
+	# val_for_max_seed: value associated with the seed that gave the maximum error metric
+	# avg_val: average of the error metric (or its transformation)
+	# percentile_val: percentile of the error metric (or its transformation)
+
+	if ERROR_METRIC.lower() == "sqnr":
+		# Convert 1/SQNR error metrics to SQNR for reporting
+		# min_error_metric (best error, e.g., 0) -> highest SQNR (e.g., inf)
+		# max_error_metric (worst error, e.g., inf) -> lowest SQNR (e.g., 0)
+		# The percentile is for the (100-P)th of 1/SQNR, so 1/it is Pth of SQNR.
+		val_for_min_seed_report = _convert_error_to_sqnr_display(min_sqnr_transformed)
+		val_for_max_seed_report = _convert_error_to_sqnr_display(max_sqnr_transformed)
+		
+		# Calculate average SQNR, handling special cases
+		if processed_count > 0:
+			# Filter out infinite values and zeros which would cause problems
+			valid_errors = [e for e in error_metric_vector if e != 0.0 and e != float('inf')]
+			if valid_errors:
+				# Calculate arithmetic mean of SQNR for valid values
+				sqnr_values = [1.0/e for e in valid_errors]
+				avg_val_report = sum(sqnr_values) / len(sqnr_values)
+			else:
+				# All values were either perfect (0.0) or worst case (inf)
+				if all(e == 0.0 for e in error_metric_vector):
+					avg_val_report = float('inf')  # All perfect matches
+				elif all(e == float('inf') for e in error_metric_vector):
+					avg_val_report = 0.0  # All worst cases
+				else:	
+					# Mix of perfect and worst - use a reasonable value
+					avg_val_report = 1.0 / avg_transformed_sqnr if avg_transformed_sqnr > 0 else float('inf')
+		else:
+			avg_val_report = 0.0
+			
+		percentile_val_report = _convert_error_to_sqnr_display(SQNR_pecentile_transformed) # P-th percentile of SQNRs
+	else: # For avg_abs or other metrics where lower error is better and value is direct
+		val_for_min_seed_report = min_sqnr_transformed
+		val_for_max_seed_report = max_sqnr_transformed
+		avg_val_report = avg_transformed_sqnr
+		percentile_val_report = SQNR_pecentile_transformed
+
+	print("[%d,%f,%d,%f,%f,%f]"%(min_seed, val_for_min_seed_report, max_seed, val_for_max_seed_report, avg_val_report, percentile_val_report))
 	
-def write_log(sqnr_vector):
-	with open('log_sqnr.txt', 'w') as log_file:
-		for element in sqnr_vector:
+	if DEBUG:
+		if ERROR_METRIC.lower() == "sqnr":
+			print(" \n Reported Max SQNR (from min error metric): " + str(val_for_min_seed_report) + " with min_seed " + str(min_seed) + f" (Error metric: {min_sqnr_transformed})")
+			print(" \n Reported Min SQNR (from max error metric): " + str(val_for_max_seed_report) + " with max_seed " + str(max_seed) + f" (Error metric: {max_sqnr_transformed})")
+			print("\n Reported Harmonic Mean SQNR: "+ str(avg_val_report) + f" (Avg error metric: {avg_transformed_sqnr})")
+			print(f"\n Reported {PERCENTILE_VALUE}th Percentile SQNR: " + str(percentile_val_report) + f" ({100-PERCENTILE_VALUE}th percentile error metric: {SQNR_pecentile_transformed})")
+		else:
+			print(" \n min error metric (best error): " + str(val_for_min_seed_report) + " with min_seed " + str(min_seed))
+			print(" \n max error metric (worst error): " + str(val_for_max_seed_report) + " with max_seed " + str(max_seed))
+			print("\n average error metric: "+ str(avg_val_report))
+			print(f"\n {100-PERCENTILE_VALUE}th Percentile of error metric: " + str(percentile_val_report))
+
+	if WRITE_LOG and error_metric_vector: # Ensure error_metric_vector is populated
+		write_log(error_metric_vector) # Log will contain actual error values
+
+def write_log(error_val_vector): # Renamed parameter for clarity
+	with open('log_sqnr.txt', 'w') as log_file: # Filename might be a misnomer if metric is not SQNR-based
+		for element in error_val_vector:
 			log_file.write(str(element) + ",")
 			
 if __name__ == '__main__':
 	arguments = sys.argv[1:]
-	if len(arguments)!=3:
-		print "usage ./statistics_analysis.py float_ver mpfr_ver range"
-		exit(0)
-	if not ('/' in arguments[0]):
-		arguments[0] = './' + arguments[0]
-	if not ('/' in arguments[1]):
-		arguments[1] = './' + arguments[1]
-	main(arguments[0],arguments[1], arguments[2])
+	parser = argparse.ArgumentParser(description='Statistics analysis of error for a program on different random inputs.')
+	parser.add_argument('float_ver', help='Original version of the program (reference)')
+	parser.add_argument('mpfr_ver', help='MPFR version of the program transformed by c2mpfr')
+	parser.add_argument('range', help='Number of random inputs to be tested')
+	parser.add_argument('--metric', choices=['sqnr', 'avg_abs'], default='sqnr',
+						help='Error metric to use (sqnr or avg_abs)')
+	parser.add_argument('--processes', type=int, default=multiprocessing.cpu_count(),
+						help=f'Number of processes to use (default: {multiprocessing.cpu_count()})')
+	
+	args = parser.parse_args()
+	
+	# Set global variables based on arguments
+	ERROR_METRIC = args.metric
+	NUM_PROCESSES = args.processes
+	
+	if not ('/' in args.float_ver):
+		args.float_ver = './' + args.float_ver
+	if not ('/' in args.mpfr_ver):
+		args.mpfr_ver = './' + args.mpfr_ver
+	
+	main(args.float_ver, args.mpfr_ver, args.range)
 

@@ -24,12 +24,12 @@ int init_readconfig() {
   // For reading precision contents of config_file into array
    FILE *myFile;
      myFile = fopen("config_file.txt", "r");
- 
+
         if (myFile == NULL) {
 					printf("Error Reading File\\n");
                 exit (0);
                 }
- 
+
         int s;
         for (s = 0; s < LEN; s++) {
             fscanf(myFile, "%d,", &config_vals[s]);
@@ -37,7 +37,7 @@ int init_readconfig() {
 
         fclose(myFile);
         init_mpfr();
-        return 0;             
+        return 0;
 }
 '''
 
@@ -47,12 +47,12 @@ int init_readconfig() {
   // For reading precision contents of config_file into array
    FILE *myFile;
      myFile = fopen("config_file.txt", "r");
- 
+
         if (myFile == NULL) {
 					printf("Error Reading File\\n");
                 exit (0);
                 }
- 
+
         int s;
         for (s = 0; s < LEN-1; s++) {
             fscanf(myFile, "%d,", &config_vals[s+1]);
@@ -60,14 +60,14 @@ int init_readconfig() {
 		config_vals[0] = 53; //all temp_vars are 53 bits in mantissa
         fclose(myFile);
         init_mpfr();
-        return 0;             
+        return 0;
 }
 '''
-def write_config (num_vars, value):
+def write_config(num_vars, value):
 	f = open('config_file.txt', 'w')
-	out_string = '%s,'%(value)*num_vars + '\n'
-	f.write(out_string);
-	
+	out_string = '{},'.format(value) * num_vars + '\n'
+	f.write(out_string)
+
 def get_headers(filename): #get the original list of headers .h file in source file. Use to reconstruct the code for compilablility
     headers_list = []
     with open(filename,'r') as f:
@@ -76,11 +76,11 @@ def get_headers(filename): #get the original list of headers .h file in source f
             if '#include' in line:
                 headers_list.append(line)
     return headers_list
-    
+
 def translate_to_c(filename, ignore_temp_var=False):
     ast = parse_file(filename, use_cpp=True,
             cpp_path='gcc',
-            cpp_args=['-E', r'-I/home/minh/github/c2mpfr/utils/fake_libc_include'])
+            cpp_args=['-E', r'-I../utils/fake_libc_include'])
     generator = c_generator.CGenerator()
     init_mpfr_list = []
     mpfr_vars_decl = []
@@ -106,15 +106,13 @@ def translate_to_c(filename, ignore_temp_var=False):
                 if '\\' in line:
                     line.replace('\\','\\\\')
                 if line != ';\n':
-					eliminate_mpfr_init.append(line)
-	if ignore_temp_var:
-		write_config(num_vars-1, 53)
-	else:
-		write_config(num_vars,53)
-		
-	
-	
-    final_output = open('converted2mpfr.c', 'w')	
+                    eliminate_mpfr_init.append(line)
+    if ignore_temp_var:
+        write_config(num_vars-1, 53)
+    else:
+        write_config(num_vars,53)
+
+    final_output = open('converted2mpfr.c', 'w')
     for line in get_headers(filename):
         final_output.write(line)
     final_output.write('#include <mpfr.h>\n')
@@ -147,7 +145,7 @@ if __name__ == "__main__":
         translate_to_c(sys.argv[1], True)
     else:
         print ("usage ./C2C.py filename [ignore_temp_var *all tempvars = 53bits mantissa]")
-        
+
    #translate_to_c("c_files/Test.c")
     #else:
         #print("Please provide a filename as argument")
